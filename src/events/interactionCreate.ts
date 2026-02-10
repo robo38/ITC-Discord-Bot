@@ -102,13 +102,15 @@ async function handleThemeSelection(interaction: any) {
         }
 
         // Disable all buttons
-        const disabledRow = interaction.message.components[0];
-        disabledRow.components.forEach((button: any) => {
-            button.data.disabled = true;
+        const disabledRows = interaction.message.components.map((row: any) => {
+            row.components.forEach((button: any) => {
+                button.data.disabled = true;
+            });
+            return row;
         });
 
         await interaction.update({
-            components: [disabledRow]
+            components: disabledRows
         });
 
         await interaction.followUp({
