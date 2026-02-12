@@ -1,5 +1,7 @@
 import { Events, MessageFlags, Interaction } from "discord.js";
 import { updateParticipantTheme, hasSelectedTheme } from "../utils/participantManager";
+import { checkCommandPermission } from "../utils/permissions";
+import { continueWorkshop, stopWorkshop } from "../workshop";
 
 const THEME1_ROLE = process.env.THEME1_ROLE!;
 const THEME2_ROLE = process.env.THEME2_ROLE!;
@@ -14,6 +16,16 @@ export default {
 
             if (!command) {
                 console.error(`No command matching ${interaction.commandName} was found.`);
+                return;
+            }
+
+            // Check permissions based on folder
+            const permissionCheck = await checkCommandPermission(interaction, command.folder);
+            if (!permissionCheck.allowed) {
+                await interaction.reply({
+                    content: permissionCheck.message || "❌ You don't have permission to use this command.",
+                    flags: MessageFlags.Ephemeral,
+                });
                 return;
             }
 
@@ -42,6 +54,42 @@ export default {
 
             if (customId.startsWith("theme_")) {
                 await handleThemeSelection(interaction);
+            }
+
+            // Workshop Continue/Stop buttons
+            if (customId.startsWith("workshop_continue_")) {
+                const workshopId = customId.replace("workshop_continue_", "");
+                const success = await continueWorkshop(workshopId);
+                if (success) {
+                    await interaction.reply({
+                        content: "▶️ Workshop extended by 30 more minutes. You'll be notified again when time is up.",
+                        flags: MessageFlags.Ephemeral,
+                    });
+                } else {
+                    await interaction.reply({
+                        content: "❌ Workshop not found or already stopped.",
+                        flags: MessageFlags.Ephemeral,
+                    });
+                }
+                // Disable buttons
+                try {
+                    await interaction.message.edit({ components: [] });
+                } catch {}
+            }
+
+            if (customId.startsWith("workshop_stop_")) {
+                const workshopId = customId.replace("workshop_stop_", "");
+                await interaction.deferReply({ ephemeral: true });
+                const result = await stopWorkshop(workshopId, interaction.client);
+                await interaction.editReply(
+                    result.success
+                        ? `⏹️ ${result.message}`
+                        : `❌ ${result.message}`
+                );
+                // Disable buttons
+                try {
+                    await interaction.message.edit({ components: [] });
+                } catch {}
             }
         }
     },

@@ -85,6 +85,27 @@ export function hasSelectedTheme(userId: string): boolean {
     return participantThemes.has(userId);
 }
 
+// Get all participant IDs from CSV
+function getExistingParticipantIds(): Set<string> {
+    try {
+        initializeCSV();
+        const csvContent = fs.readFileSync(CSV_PATH, "utf-8");
+        const lines = csvContent.split("\n").slice(1); // Skip header
+        
+        const ids = new Set<string>();
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            const [discordId] = line.split(",");
+            if (discordId) {
+                ids.add(discordId.trim());
+            }
+        }
+        return ids;
+    } catch (error) {
+        return new Set<string>();
+    }
+}
+
 // Load existing themes on startup
 export async function loadExistingThemes() {
     try {
@@ -106,6 +127,38 @@ export async function loadExistingThemes() {
         console.log(`Loaded ${count} existing theme selections from CSV`);
     } catch (error) {
         console.log("No existing themes to load or CSV doesn't exist yet");
+    }
+}
+
+// Sync all members with participant role to CSV
+export async function syncParticipantsFromRole(client: any) {
+    try {
+        const BOOTCAMP_GUILD_ID = process.env.BOOTCAMP_GUILD_ID!;
+        const BOOTCAMP_ROLE = process.env.BOOTCAMP_ROLE!;
+
+        const guild = await client.guilds.fetch(BOOTCAMP_GUILD_ID);
+        const members = await guild.members.fetch();
+
+        const existingIds = getExistingParticipantIds();
+        let addedCount = 0;
+
+        for (const [memberId, member] of members) {
+            // Skip bots
+            if (member.user.bot) continue;
+
+            // Check if member has the bootcamp role
+            if (member.roles.cache.has(BOOTCAMP_ROLE)) {
+                // If not in CSV, add them
+                if (!existingIds.has(memberId)) {
+                    await addParticipant(memberId);
+                    addedCount++;
+                }
+            }
+        }
+
+        console.log(`✅ Synced participants: ${addedCount} new members added to CSV`);
+    } catch (error) {
+        console.error("Error syncing participants from role:", error);
     }
 }
 

@@ -9,6 +9,7 @@ export interface CommandType {
     data: any;
     run: (interaction: ChatInputCommandInteraction, client: Client) => Promise<any>;
     access?: boolean;
+    folder?: string; // Track which folder the command is from (admin, dev, general, leader)
 }
 
 declare module "discord.js" {

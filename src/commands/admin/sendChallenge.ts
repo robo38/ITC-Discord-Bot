@@ -33,9 +33,10 @@ export default {
                 .setAccentColor(0x00AE86)
                 .addTextDisplayComponents((textDisplay) =>
                     textDisplay.setContent(
-                        '**🏆 Bootcamp Kickoff Challenge 🏆**\n\n' +
-                        'Alright teams 👀🔥\nwe\'re launching our **Mini Challenge**!\n\n' +
-                        'Each team must choose **ONE theme only** and build a simple functional mobile app based on it.'
+                        '**BOOTCAMP MINI CHALLENGE ✨**\n\n' +
+                        'Heyyyyyy teams 🔥\n' +
+                        'We\'re officially launching the Mini Challenge.\n\n' +
+                        'Each team must choose **ONE theme only** and build a simple, functional mobile app based on it.'
                     )
                 )
                 .addSeparatorComponents((separator) => separator)
@@ -43,15 +44,16 @@ export default {
                     section
                         .addTextDisplayComponents((textDisplay) =>
                             textDisplay.setContent(
-                                '**📱 THEME 1: Smart To-Do / Task Manager**\n\n' +
-                                '**💡 Idea**\n' +
-                                'A simple app to help users organize their daily tasks.\n\n' +
-                                '**🔧 Required Functions**\n' +
-                                '• User registration & login\n' +
-                                '• Create a task (title + description)\n' +
-                                '• Mark task as done / not done\n' +
-                                '• Edit or delete a task\n' +
-                                '• Display task list from Firestore'
+                                '**� THEME 1 — Smart To-Do / Task Manager**\n\n' +
+                                '**Flutter Concepts Used**\n' +
+                                'Forms • ListView • Cards • Checkbox • Stateful UI • Navigation\n\n' +
+                                '**Required Features**\n' +
+                                '1. Authentication\n' +
+                                '2. Add Task Screen (Title, Description, Add Task button)\n' +
+                                '3. Tasks List Screen (ListView with Cards, Title + Description, Checkbox for Done/Not Done, UI updates when checked)\n' +
+                                '4. Edit Task Screen (Modify title & description, Save button)\n' +
+                                '5. Filter Section (All Tasks button, Completed Tasks button)\n' +
+                                '6. Delete Task'
                             )
                         )
                         .setButtonAccessory((button) =>
@@ -66,15 +68,15 @@ export default {
                     section
                         .addTextDisplayComponents((textDisplay) =>
                             textDisplay.setContent(
-                                '**🌐 THEME 2: Mini Social Wall (Anonymous Confessions / Posts)**\n\n' +
-                                '**💡 Idea**\n' +
-                                'A simple anonymous wall where students share thoughts, advice, or messages.\n\n' +
-                                '**🔧 Required Functions**\n' +
-                                '• Authentication\n' +
-                                '• Create a post (text)\n' +
-                                '• Display posts feed (Firestore)\n' +
-                                '• Like a post\n' +
-                                '• Delete own post'
+                                '**📌 THEME 2 — Mini Social Wall (Anonymous Posts)**\n\n' +
+                                '**Flutter Concepts Used**\n' +
+                                'Feed UI • Buttons • Counters • Stateful Updates\n\n' +
+                                '**Required Features**\n' +
+                                '1. Authentication\n' +
+                                '2. Create Post Screen (TextField for post content, Publish button)\n' +
+                                '3. Feed Screen (ListView with Cards containing Text, Like button, Likes counter that updates live)\n' +
+                                '4. Delete Own Post\n' +
+                                '5. My Posts Screen (Shows only posts created by the user)'
                             )
                         )
                         .setButtonAccessory((button) =>
@@ -89,15 +91,15 @@ export default {
                     section
                         .addTextDisplayComponents((textDisplay) =>
                             textDisplay.setContent(
-                                '**📊 THEME 3: Daily Habit Tracker**\n\n' +
-                                '**💡 Story**\n' +
-                                'Help users build good habits (study, gym, reading, water…).\n\n' +
-                                '**🔧 Required Functions**\n' +
-                                '• Authentication\n' +
-                                '• Create a habit (name)\n' +
-                                '• Mark habit as done for today\n' +
-                                '• View habits list\n' +
-                                '• Track how many days completed'
+                                '**� THEME 3 — Daily Habit Tracker**\n\n' +
+                                '**Flutter Concepts Used**\n' +
+                                'Checkbox • Stateful UI • Progress Display • Lists\n\n' +
+                                '**Required Features**\n' +
+                                '1. Authentication\n' +
+                                '2. Add Habit Screen (Habit name, Add button)\n' +
+                                '3. Habits List Screen (ListView of habits, Checkbox for Done today, UI updates when checked)\n' +
+                                '4. Progress Section (Text: "You completed X habits today")\n' +
+                                '5. Delete Habit'
                             )
                         )
                         .setButtonAccessory((button) =>
@@ -111,12 +113,13 @@ export default {
                 .addSeparatorComponents((separator) => separator)
                 .addTextDisplayComponents((textDisplay) =>
                     textDisplay.setContent(
-                        '**📌 Rules & Notes**\n' +
+                        '**� Rules & Notes**\n' +
                         '• Each team chooses **ONE theme only**\n' +
-                        '• All required functions must be implemented\n' +
+                        '• All required features must be implemented\n' +
                         '• Clean UI and working logic are more important than complexity\n' +
-                        '• 🏅 All participants who take part in the challenge will receive a **Certificate of Participation**\n\n' +
-                        '**📅 Presentation Date: 12 February**'
+                        '• All participants will receive a **Certificate of Participation**\n' +
+                        '• Each team will present their app and explain their code on the presentation day\n\n' +
+                        '**Presentation Date: 12 February**'
                     )
                 );
 

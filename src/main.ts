@@ -3,6 +3,9 @@ import { config } from "dotenv";
 import fs from "fs";
 import path from "path";
 import { loadExistingThemes } from "./utils/participantManager";
+import { connectDB } from "./database";
+import { loginAllVoiceBots } from "./voice";
+import { setMainClient } from "./workshop";
 
 config();
 
@@ -13,7 +16,8 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildInvites
+        GatewayIntentBits.GuildInvites,
+        GatewayIntentBits.GuildVoiceStates,
     ]
 });
 
@@ -41,6 +45,8 @@ export async function loadCommands() {
             command = command.default || command;
 
             if ("data" in command && ("run" in command || "execute" in command)) {
+                // Store the folder name with the command
+                command.folder = folder;
                 client.commands.set(command.data.name, command);
             } else {
                 console.log(
@@ -98,11 +104,17 @@ if (fs.existsSync(eventsPath)) {
 await loadCommands();
 await registerCommands();
 
+// Connect to MongoDB
+await connectDB();
+
 // Load existing theme selections from the sheet
 await loadExistingThemes();
 
 // Cache invites for tracking
 client.once('ready', async () => {
+    // Store main client reference for workshop system
+    setMainClient(client);
+
     const bootcampGuildId = process.env.BOOTCAMP_GUILD_ID;
     if (bootcampGuildId) {
         try {
@@ -117,6 +129,13 @@ client.once('ready', async () => {
         } catch (error) {
             console.error("Error caching invites:", error);
         }
+    }
+
+    // Login all 18 voice bots after main bot is ready
+    try {
+        await loginAllVoiceBots();
+    } catch (error) {
+        console.error("Error logging in voice bots:", error);
     }
 });
 
