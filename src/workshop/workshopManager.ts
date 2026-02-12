@@ -17,6 +17,9 @@ const activeTrackers: Map<string, ActivityTracker> = new Map();
 // Map workshopId → NodeJS.Timeout (for auto-notification)
 const workshopTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
+// Map workshopId → NodeJS.Timeout (for 30-min reminder before start)
+const reminderTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
 // Store reference to the main bot client
 let mainBotClient: Client | null = null;
 
@@ -26,19 +29,14 @@ export function setMainClient(client: Client): void {
 
 /**
  * Find the team config for a given leader based on their roles.
+ * LeaderID is a Discord role ID — match it against the user's roles.
  */
 export function findTeamForLeader(
-    leaderID: string,
+    _leaderID: string,
     memberRoles: string[]
 ): TeamConfig | undefined {
     return teamsData.find((team) => {
-        // Check if the leader is assigned to this team
-        if (team.LeaderID === leaderID) return true;
-        // Or if they have the team's member role
-        return (
-            memberRoles.includes(team.MemberRole1ID) ||
-            memberRoles.includes(team.MemberRole2ID)
-        );
+        return team.LeaderID && memberRoles.includes(team.LeaderID);
     });
 }
 
@@ -128,6 +126,16 @@ export async function createWorkshop(
     setTimeout(async () => {
         await activateWorkshop(workshopId, teamConfig, mainClient);
     }, delay);
+
+    // Schedule 30-min reminder for MemberRole1ID members (if start is >30 min from now)
+    const reminderMs = startMs - 30 * 60_000;
+    const reminderDelay = reminderMs - now;
+    if (reminderDelay > 0 && teamConfig.MemberRole1ID) {
+        const reminderTimer = setTimeout(async () => {
+            await sendStartReminder(teamConfig, type, startTime, mainClient);
+        }, reminderDelay);
+        reminderTimers.set(workshopId, reminderTimer);
+    }
 
     return {
         success: true,
@@ -223,28 +231,67 @@ async function notifyLeaderWorkshopEnded(
 }
 
 /**
- * Continue a workshop (when leader clicks Continue).
+ * Continue a workshop with a custom additional duration.
+ * Saves the extension and schedules a new end-time notification.
  */
-export async function continueWorkshop(workshopId: string): Promise<boolean> {
+export async function continueWorkshop(
+    workshopId: string,
+    additionalMinutes: number = 30
+): Promise<boolean> {
     const workshop = await Workshop.findOne({ workshopId, status: "active" });
     if (!workshop) return false;
 
-    // Clear existing timer and set a new one for 30 more minutes
+    // Save extension
+    workshop.extensions.push({
+        addedAt: new Date(),
+        additionalMinutes,
+    });
+    await workshop.save();
+
+    // Clear existing timer and set a new one for the additional time
     const existingTimer = workshopTimers.get(workshopId);
     if (existingTimer) clearTimeout(existingTimer);
 
     const teamConfig = teamsData.find((t) => t.TeamName === workshop.teamName);
     if (!teamConfig) return false;
 
-    // Extend by 30 minutes
     const timer = setTimeout(async () => {
         if (mainBotClient) {
             await notifyLeaderWorkshopEnded(workshopId, teamConfig, mainBotClient);
         }
-    }, 30 * 60_000);
+    }, additionalMinutes * 60_000);
 
     workshopTimers.set(workshopId, timer);
     return true;
+}
+
+/**
+ * Send a 30-minute reminder to all members with MemberRole1ID (first team only).
+ */
+async function sendStartReminder(
+    teamConfig: TeamConfig,
+    type: string,
+    startTime: Date,
+    mainClient: Client
+): Promise<void> {
+    try {
+        if (!teamConfig.GeneralAnnouncementID) return;
+
+        const channel = await mainClient.channels.fetch(teamConfig.GeneralAnnouncementID);
+        if (!channel || !channel.isTextBased()) return;
+
+        const startTimestamp = Math.floor(startTime.getTime() / 1000);
+        await (channel as TextChannel).send({
+            content:
+                `⏰ **Reminder!** A **${type}** for **${teamConfig.TeamName}** starts in **30 minutes!**\n` +
+                `Start time: <t:${startTimestamp}:F> (<t:${startTimestamp}:R>)\n\n` +
+                `<@&${teamConfig.MemberRole1ID}> Make sure to be ready! 🎯`,
+        });
+
+        console.log(`[Workshop][${teamConfig.TeamName}] 30-min reminder sent.`);
+    } catch (error) {
+        console.error(`[Workshop][${teamConfig.TeamName}] Error sending reminder:`, error);
+    }
 }
 
 /**
@@ -273,6 +320,13 @@ export async function stopWorkshop(
     if (timer) {
         clearTimeout(timer);
         workshopTimers.delete(workshopId);
+    }
+
+    // Clear reminder timer
+    const reminder = reminderTimers.get(workshopId);
+    if (reminder) {
+        clearTimeout(reminder);
+        reminderTimers.delete(workshopId);
     }
 
     // Stop tracking

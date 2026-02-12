@@ -32,10 +32,23 @@ export class ActivityTracker {
         }
     > = new Map();
 
+    // Per-member operation queue to prevent race conditions
+    private memberLocks: Map<string, Promise<void>> = new Map();
+
     constructor(workshopId: string, teamConfig: TeamConfig, mainClient: Client) {
         this.workshopId = workshopId;
         this.teamConfig = teamConfig;
         this.mainClient = mainClient;
+    }
+
+    /**
+     * Serialize async operations per member to prevent race conditions.
+     */
+    private async withMemberLock(discordId: string, fn: () => Promise<void>): Promise<void> {
+        const prev = this.memberLocks.get(discordId) || Promise.resolve();
+        const next = prev.then(fn, fn); // run even if previous failed
+        this.memberLocks.set(discordId, next);
+        await next;
     }
 
     /**
@@ -60,6 +73,10 @@ export class ActivityTracker {
      * Handle a member joining the tracked voice channel.
      */
     async handleJoin(member: GuildMember): Promise<void> {
+        await this.withMemberLock(member.id, () => this._handleJoin(member));
+    }
+
+    private async _handleJoin(member: GuildMember): Promise<void> {
         const now = new Date();
         const discordId = member.id;
 
@@ -129,6 +146,10 @@ export class ActivityTracker {
      * Handle a member leaving the tracked voice channel.
      */
     async handleLeave(discordId: string): Promise<void> {
+        await this.withMemberLock(discordId, () => this._handleLeave(discordId));
+    }
+
+    private async _handleLeave(discordId: string): Promise<void> {
         const now = new Date();
         const state = this.memberState.get(discordId);
         if (!state) return;
@@ -170,6 +191,10 @@ export class ActivityTracker {
      * Handle mute/unmute state change.
      */
     async handleMuteChange(discordId: string, isMuted: boolean): Promise<void> {
+        await this.withMemberLock(discordId, () => this._handleMuteChange(discordId, isMuted));
+    }
+
+    private async _handleMuteChange(discordId: string, isMuted: boolean): Promise<void> {
         const now = new Date();
         const state = this.memberState.get(discordId);
         if (!state) return;
@@ -207,6 +232,10 @@ export class ActivityTracker {
      * Handle deafen/undeafen state change.
      */
     async handleDeafenChange(discordId: string, isDeafened: boolean): Promise<void> {
+        await this.withMemberLock(discordId, () => this._handleDeafenChange(discordId, isDeafened));
+    }
+
+    private async _handleDeafenChange(discordId: string, isDeafened: boolean): Promise<void> {
         const now = new Date();
         const state = this.memberState.get(discordId);
         if (!state) return;
@@ -276,45 +305,62 @@ export class ActivityTracker {
 
     /**
      * Finalize all tracked members (mark them as stayed until end + close sessions).
+     * Also catches any orphaned open sessions from DB as a safety net.
      */
     async finalizeAll(): Promise<void> {
         const now = new Date();
 
-        for (const [discordId] of this.memberState) {
-            const participant = await Participant.findOne({
-                workshopId: this.workshopId,
-                discordId,
-            });
+        // Wait for any pending member operations to complete
+        await Promise.allSettled(Array.from(this.memberLocks.values()));
 
-            if (participant) {
-                // Mark as stayed until end
+        // Set of members who are still in memberState (stayed until end)
+        const stayedMembers = new Set(this.memberState.keys());
+
+        // Fetch ALL participants for this workshop to catch orphaned sessions
+        const allParticipants = await Participant.find({ workshopId: this.workshopId });
+
+        for (const participant of allParticipants) {
+            let changed = false;
+
+            // Mark as stayed until end if still in memberState
+            if (stayedMembers.has(participant.discordId)) {
                 participant.stayedUntilEnd = true;
+                changed = true;
+            }
 
-                // Close last voice session
-                const lastSession = participant.voiceSessions[participant.voiceSessions.length - 1];
-                if (lastSession && !lastSession.leaveTime) {
-                    lastSession.leaveTime = now;
-                    lastSession.duration = now.getTime() - lastSession.joinTime.getTime();
+            // Close ALL open voice sessions (not just the last one)
+            for (const session of participant.voiceSessions) {
+                if (!session.leaveTime) {
+                    session.leaveTime = now;
+                    session.duration = now.getTime() - session.joinTime.getTime();
+                    changed = true;
                 }
+            }
 
-                // Close last mic activity
-                const lastMic = participant.micActivity[participant.micActivity.length - 1];
-                if (lastMic && !lastMic.mutedAt) {
-                    lastMic.mutedAt = now;
-                    lastMic.duration = now.getTime() - lastMic.unmutedAt.getTime();
+            // Close any open mic activity
+            for (const mic of participant.micActivity) {
+                if (!mic.mutedAt) {
+                    mic.mutedAt = now;
+                    mic.duration = now.getTime() - mic.unmutedAt.getTime();
+                    changed = true;
                 }
+            }
 
-                // Close last deafen activity
-                const lastDeafen = participant.deafenActivity[participant.deafenActivity.length - 1];
-                if (lastDeafen && !lastDeafen.undeafenedAt) {
-                    lastDeafen.undeafenedAt = now;
-                    lastDeafen.duration = now.getTime() - lastDeafen.deafenedAt.getTime();
+            // Close any open deafen activity
+            for (const deafen of participant.deafenActivity) {
+                if (!deafen.undeafenedAt) {
+                    deafen.undeafenedAt = now;
+                    deafen.duration = now.getTime() - deafen.deafenedAt.getTime();
+                    changed = true;
                 }
+            }
 
+            if (changed) {
                 await participant.save();
             }
         }
 
         this.memberState.clear();
+        this.memberLocks.clear();
     }
 }

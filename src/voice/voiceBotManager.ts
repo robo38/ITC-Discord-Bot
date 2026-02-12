@@ -70,7 +70,13 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             instance.connection = connection;
             console.log(`[VoiceBot][${config.TeamName}] Joined voice channel: ${channel.name}`);
         } catch (error: any) {
-            // Handle AbortError specifically to avoid crashing
+            // Handle null/undefined error or AbortError specifically to avoid crashing
+            if (!error) {
+                console.warn(`[VoiceBot][${config.TeamName}] Connection failed (null error). Retrying...`);
+                connection.destroy();
+                setTimeout(() => joinAssignedChannel(instance), 2000);
+                return;
+            }
             if (error.code === 'ABORT_ERR' || error.message?.includes('aborted')) {
                 console.warn(`[VoiceBot][${config.TeamName}] Connection attempt aborted (likely timeout). Retrying...`);
                 connection.destroy();
@@ -152,10 +158,21 @@ export async function loginAllVoiceBots(mainClient: Client): Promise<void> {
                                 const botsRoleId = process.env.BOTS_ROLE_ID;
 
                                 if (botsRoleId) {
-                                    // Remove all roles then add the specific one, or set the roles array directly
-                                    // .set() replaces all roles with the provided list
-                                    await botMember.roles.set([botsRoleId]);
-                                    console.log(`[VoiceBot][${teamConfig.TeamName}] Roles forced to [${botsRoleId}]`);
+                                    // Only update if the bot doesn't already have exactly this role set
+                                    const currentRoles = botMember.roles.cache
+                                        .filter((r) => r.id !== guild.id) // exclude @everyone
+                                        .map((r) => r.id);
+                                    
+                                    if (currentRoles.length !== 1 || currentRoles[0] !== botsRoleId) {
+                                        try {
+                                            await botMember.roles.set([botsRoleId]);
+                                            console.log(`[VoiceBot][${teamConfig.TeamName}] Roles forced to [${botsRoleId}]`);
+                                        } catch (roleErr: any) {
+                                            // Missing Permissions — main bot's role is likely below voice bot's role
+                                            console.warn(`[VoiceBot][${teamConfig.TeamName}] Could not enforce roles (${roleErr.code || roleErr.message}). ` +
+                                                `Make sure the main bot's role is above the voice bots' roles in the server settings.`);
+                                        }
+                                    }
                                 }
                             }
                         } catch (err) {

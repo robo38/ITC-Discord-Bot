@@ -1,7 +1,8 @@
 import { ChatInputCommandInteraction, PermissionFlagsBits } from "discord.js";
 import teamsData from "../data";
+import { BE_ID } from "../data";
 
-const DEV_USER_ID = process.env.DEV_USER_ID || "695223884735053905";
+export const DEV_USER_ID = process.env.DEV_USER_ID || "695223884735053905";
 
 export async function checkCommandPermission(
     interaction: ChatInputCommandInteraction,
@@ -23,8 +24,12 @@ export async function checkCommandPermission(
         return { allowed: true };
     }
 
-    // Check for admin folder - requires Administrator permission
+    // Check for admin folder - requires Administrator permission, BE, or dev
     if (folder === "admin") {
+        // Dev and BE always have admin access
+        if (interaction.user.id === DEV_USER_ID) return { allowed: true };
+        if (BE_ID && interaction.user.id === BE_ID) return { allowed: true };
+
         const member = interaction.guild?.members.cache.get(interaction.user.id);
         if (!member) {
             return {
@@ -52,14 +57,17 @@ export async function checkCommandPermission(
             };
         }
 
-        // Check if user is listed as a leader in teamsData
-        const isLeader = teamsData.some((team) => team.LeaderID === interaction.user.id);
+        // Check if user has any team leader role from teamsData
+        const memberRoles = member.roles.cache.map((r) => r.id);
+        const isLeader = teamsData.some(
+            (team) => team.LeaderID && memberRoles.includes(team.LeaderID)
+        );
 
         if (isLeader) {
             return { allowed: true };
         }
 
-        // Also check if they have a leader role from env
+        // Also check if they have the general leader role from env
         const leaderRoleId = process.env.LEADER_ROLE_ID;
         if (leaderRoleId && member.roles.cache.has(leaderRoleId)) {
             return { allowed: true };

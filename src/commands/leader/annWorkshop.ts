@@ -55,14 +55,11 @@ export default {
             return interaction.editReply("❌ Could not fetch your member data.");
         }
 
-        // Find which team this leader belongs to
+        // Find which team this leader belongs to by checking leader role
         const memberRoles = member.roles.cache.map((r) => r.id);
         const teamConfig = teamsData.find((team) => {
-            if (team.LeaderID === leaderID) return true;
-            return (
-                memberRoles.includes(team.MemberRole1ID) ||
-                memberRoles.includes(team.MemberRole2ID)
-            );
+            // Match by LeaderID (which is a Discord role ID assigned to team leaders)
+            return team.LeaderID && memberRoles.includes(team.LeaderID);
         });
 
         if (!teamConfig) {

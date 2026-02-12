@@ -1,7 +1,7 @@
-import { Events, MessageFlags, Interaction } from "discord.js";
+import { Events, MessageFlags, Interaction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from "discord.js";
 import { updateParticipantTheme, hasSelectedTheme } from "../utils/participantManager";
 import { checkCommandPermission } from "../utils/permissions";
-import { continueWorkshop, stopWorkshop } from "../workshop";
+import { continueWorkshop, stopWorkshop, parseDuration } from "../workshop";
 
 const THEME1_ROLE = process.env.THEME1_ROLE!;
 const THEME2_ROLE = process.env.THEME2_ROLE!;
@@ -56,25 +56,25 @@ export default {
                 await handleThemeSelection(interaction);
             }
 
-            // Workshop Continue/Stop buttons
+            // Workshop Continue button → show modal for custom time
             if (customId.startsWith("workshop_continue_")) {
                 const workshopId = customId.replace("workshop_continue_", "");
-                const success = await continueWorkshop(workshopId);
-                if (success) {
-                    await interaction.reply({
-                        content: "▶️ Workshop extended by 30 more minutes. You'll be notified again when time is up.",
-                        flags: MessageFlags.Ephemeral,
-                    });
-                } else {
-                    await interaction.reply({
-                        content: "❌ Workshop not found or already stopped.",
-                        flags: MessageFlags.Ephemeral,
-                    });
-                }
-                // Disable buttons
-                try {
-                    await interaction.message.edit({ components: [] });
-                } catch {}
+
+                const modal = new ModalBuilder()
+                    .setCustomId(`workshop_continue_modal_${workshopId}`)
+                    .setTitle("Extend Workshop");
+
+                const durationInput = new TextInputBuilder()
+                    .setCustomId("additional_duration")
+                    .setLabel("Additional time (e.g. 30m, 1h, 1h30m)")
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder("30m")
+                    .setRequired(true);
+
+                const row = new ActionRowBuilder<TextInputBuilder>().addComponents(durationInput);
+                modal.addComponents(row);
+
+                await interaction.showModal(modal);
             }
 
             if (customId.startsWith("workshop_stop_")) {
@@ -90,6 +90,38 @@ export default {
                 try {
                     await interaction.message.edit({ components: [] });
                 } catch {}
+            }
+        }
+
+        // Handle modal submissions (workshop continue with custom time)
+        if (interaction.isModalSubmit()) {
+            const customId = interaction.customId;
+
+            if (customId.startsWith("workshop_continue_modal_")) {
+                const workshopId = customId.replace("workshop_continue_modal_", "");
+                const durationStr = interaction.fields.getTextInputValue("additional_duration");
+                const additionalMinutes = parseDuration(durationStr);
+
+                if (additionalMinutes <= 0) {
+                    await interaction.reply({
+                        content: "❌ Invalid duration. Use a format like `30m`, `1h`, or `1h30m`.",
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    return;
+                }
+
+                const success = await continueWorkshop(workshopId, additionalMinutes);
+                if (success) {
+                    await interaction.reply({
+                        content: `▶️ Workshop extended by **${additionalMinutes} minutes**. You'll be notified again when time is up.`,
+                        flags: MessageFlags.Ephemeral,
+                    });
+                } else {
+                    await interaction.reply({
+                        content: "❌ Workshop not found or already stopped.",
+                        flags: MessageFlags.Ephemeral,
+                    });
+                }
             }
         }
     },

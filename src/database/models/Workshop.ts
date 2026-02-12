@@ -2,6 +2,11 @@ import { mongoose } from "../connection";
 
 const { Schema, model } = mongoose;
 
+export interface IExtension {
+    addedAt: Date;
+    additionalMinutes: number;
+}
+
 export interface IWorkshop {
     workshopId: string;
     teamName: string;
@@ -10,11 +15,20 @@ export interface IWorkshop {
     type: "workshop" | "formation" | "other";
     startTime: Date;
     averageDuration: number; // in minutes
+    extensions: IExtension[];
     status: "scheduled" | "active" | "completed";
     stoppedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
+
+const extensionSchema = new Schema<IExtension>(
+    {
+        addedAt: { type: Date, required: true },
+        additionalMinutes: { type: Number, required: true },
+    },
+    { _id: false }
+);
 
 const workshopSchema = new Schema<IWorkshop>(
     {
@@ -29,6 +43,7 @@ const workshopSchema = new Schema<IWorkshop>(
         },
         startTime: { type: Date, required: true },
         averageDuration: { type: Number, required: true },
+        extensions: { type: [extensionSchema], default: [] },
         status: {
             type: String,
             enum: ["scheduled", "active", "completed"],

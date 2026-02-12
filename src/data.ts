@@ -19,7 +19,6 @@
  *   - MemberRole2ID:          "Second team" role  (Team2 from teamsConfig)
  *   - LeaderChatChannelID:    Text channel where the leader receives reports
  *   - GeneralAnnouncementID:  General announcement channel for the team
- *   - BEID:                   Back-end / extra identifier (custom per team)
  */
 
 export interface TeamConfig {
@@ -32,8 +31,10 @@ export interface TeamConfig {
     MemberRole2ID: string;
     LeaderChatChannelID: string;
     GeneralAnnouncementID: string;
-    BEID: string;
 }
+
+/** Single BE (back-end) user ID — shared across all teams */
+export const BE_ID: string = process.env.BE_ID || "";
 
 const env = process.env;
 
@@ -48,7 +49,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527047675871252",
         LeaderChatChannelID: env.TEAM_AI_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_AI_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_AI_BEID || "",
     },
     {
         BotId: env.TEAM_SECURITY_BOT_ID || "",
@@ -60,7 +60,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527217402585121",
         LeaderChatChannelID: env.TEAM_SECURITY_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_SECURITY_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_SECURITY_BEID || "",
     },
     {
         BotId: env.TEAM_ROBOTIC_BOT_ID || "",
@@ -72,7 +71,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527377583046666",
         LeaderChatChannelID: env.TEAM_ROBOTIC_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_ROBOTIC_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_ROBOTIC_BEID || "",
     },
     {
         BotId: env.TEAM_MARKETING_BOT_ID || "",
@@ -84,7 +82,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527380330336266",
         LeaderChatChannelID: env.TEAM_MARKETING_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_MARKETING_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_MARKETING_BEID || "",
     },
     {
         BotId: env.TEAM_WEB_FRONTEND_ADV_BOT_ID || "",
@@ -96,7 +93,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527759524757556",
         LeaderChatChannelID: env.TEAM_WEB_FRONTEND_ADV_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_WEB_FRONTEND_ADV_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_WEB_FRONTEND_ADV_BEID || "",
     },
     {
         BotId: env.TEAM_WEB_FRONTEND_BEG_BOT_ID || "",
@@ -108,7 +104,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528087913594970",
         LeaderChatChannelID: env.TEAM_WEB_FRONTEND_BEG_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_WEB_FRONTEND_BEG_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_WEB_FRONTEND_BEG_BEID || "",
     },
     {
         BotId: env.TEAM_WEB_BACKEND_BOT_ID || "",
@@ -120,7 +115,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192527624153608303",
         LeaderChatChannelID: env.TEAM_WEB_BACKEND_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_WEB_BACKEND_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_WEB_BACKEND_BEID || "",
     },
     {
         BotId: env.TEAM_MOBILE_DEV_BOT_ID || "",
@@ -132,7 +126,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528471361060935",
         LeaderChatChannelID: env.TEAM_MOBILE_DEV_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_MOBILE_DEV_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_MOBILE_DEV_BEID || "",
     },
     {
         BotId: env.TEAM_DESIGN_BEG_BOT_ID || "",
@@ -144,7 +137,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528667390251038",
         LeaderChatChannelID: env.TEAM_DESIGN_BEG_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_DESIGN_BEG_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_DESIGN_BEG_BEID || "",
     },
     {
         BotId: env.TEAM_DESIGN_ADV_BOT_ID || "",
@@ -156,7 +148,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528578198380565",
         LeaderChatChannelID: env.TEAM_DESIGN_ADV_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_DESIGN_ADV_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_DESIGN_ADV_BEID || "",
     },
     {
         BotId: env.TEAM_VIDEO_EDITING_BOT_ID || "",
@@ -168,7 +159,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528791185145956",
         LeaderChatChannelID: env.TEAM_VIDEO_EDITING_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_VIDEO_EDITING_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_VIDEO_EDITING_BEID || "",
     },
     {
         BotId: env.TEAM_NETWORKS_BOT_ID || "",
@@ -180,7 +170,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528876388229227",
         LeaderChatChannelID: env.TEAM_NETWORKS_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_NETWORKS_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_NETWORKS_BEID || "",
     },
     {
         BotId: env.TEAM_UI_UX_BOT_ID || "",
@@ -192,7 +181,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192528951642439700",
         LeaderChatChannelID: env.TEAM_UI_UX_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_UI_UX_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_UI_UX_BEID || "",
     },
     {
         BotId: env.TEAM_3D_BOT_ID || "",
@@ -204,7 +192,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192529022471643176",
         LeaderChatChannelID: env.TEAM_3D_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_3D_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_3D_BEID || "",
     },
     {
         BotId: env.TEAM_GAME_DEV_BOT_ID || "",
@@ -216,7 +203,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1192529085121970176",
         LeaderChatChannelID: env.TEAM_GAME_DEV_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_GAME_DEV_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_GAME_DEV_BEID || "",
     },
     {
         BotId: env.TEAM_TRADING_BOT_ID || "",
@@ -228,7 +214,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1311028089894994041",
         LeaderChatChannelID: env.TEAM_TRADING_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_TRADING_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_TRADING_BEID || "",
     },
     {
         BotId: env.TEAM_DEV_OPS_BOT_ID || "",
@@ -240,7 +225,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "1311028354811691112",
         LeaderChatChannelID: env.TEAM_DEV_OPS_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_DEV_OPS_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_DEV_OPS_BEID || "",
     },
     {
         BotId: env.TEAM_SPONSORING_BOT_ID || "",
@@ -252,7 +236,6 @@ const teamsData: TeamConfig[] = [
         MemberRole2ID: "",
         LeaderChatChannelID: env.TEAM_SPONSORING_LEADER_CHAT_CHANNEL_ID || "",
         GeneralAnnouncementID: env.TEAM_SPONSORING_GENERAL_ANNOUNCEMENT_ID || "",
-        BEID: env.TEAM_SPONSORING_BEID || "",
     },
 ];
 
