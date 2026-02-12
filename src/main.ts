@@ -21,6 +21,17 @@ const client = new Client({
     ]
 });
 
+// Global error handling to prevent process crashes
+process.on('unhandledRejection', (reason, p) => {
+    console.error('Unhandled Rejection at:', p, 'reason:', reason);
+    // Application specific logging, throwing an error, or other logic here
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    // Prevent exit
+});
+
 client.commands = new Collection();
 client.inviteCache = new Map(); // For tracking invite usage
 
@@ -111,7 +122,7 @@ await connectDB();
 await loadExistingThemes();
 
 // Cache invites for tracking
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     // Store main client reference for workshop system
     setMainClient(client);
 
@@ -133,7 +144,7 @@ client.once('ready', async () => {
 
     // Login all 18 voice bots after main bot is ready
     try {
-        await loginAllVoiceBots();
+        await loginAllVoiceBots(client);
     } catch (error) {
         console.error("Error logging in voice bots:", error);
     }

@@ -4,7 +4,7 @@ import { syncParticipantsFromRole } from "../utils/participantManager";
 import cron from "node-cron";
 
 export default {
-    name: Events.ClientReady,
+    name: 'clientReady',
     once: true,
     async execute(client: Client) {
         console.log(`Logged in as ${client.user?.tag}`);
