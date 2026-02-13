@@ -6,6 +6,8 @@ import { loadExistingThemes } from "./utils/participantManager";
 import { connectDB } from "./database";
 import { loginAllVoiceBots } from "./voice";
 import { setMainClient } from "./workshop";
+import { startDashboard, setDashboardClient } from "./dashboard";
+import { initLogger, logError, logSuccess, logDatabase, logDebug } from "./utils/logger";
 
 config();
 
@@ -21,15 +23,27 @@ const client = new Client({
     ]
 });
 
+// Patch discord.js WS error handler for Bun compatibility
+// Bun can pass non-object errors to WebSocket onError, which crashes discord.js
+client.rest.on("rateLimited", (info) => {
+    logDebug("Discord Rate Limited", JSON.stringify(info));
+});
+
+client.on("error", (err) => {
+    logError("Discord Client Error", err);
+});
+
+client.on("shardError", (err, shardId) => {
+    logError(`Discord Shard ${shardId} WS Error`, err);
+});
+
 // Global error handling to prevent process crashes
-process.on('unhandledRejection', (reason, p) => {
-    console.error('Unhandled Rejection at:', p, 'reason:', reason);
-    // Application specific logging, throwing an error, or other logic here
+process.on('unhandledRejection', (reason: any) => {
+    logError('Unhandled Rejection', reason instanceof Error ? reason : String(reason));
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    // Prevent exit
+    logError('Uncaught Exception', err);
 });
 
 client.commands = new Collection();
@@ -85,9 +99,9 @@ export async function registerCommands() {
             }
         );
 
-        console.log(`Successfully reloaded ${data.length} commands.`);
-    } catch (error) {
-        console.error(error);
+        logSuccess("Commands", `Successfully reloaded ${data.length} commands`);
+    } catch (error: any) {
+        logError("Register commands failed", error);
     }
 }
 
@@ -118,6 +132,10 @@ await registerCommands();
 // Connect to MongoDB
 await connectDB();
 
+// Start the web dashboard
+const dashboardPort = parseInt(process.env.DASHBOARD_PORT || "4000");
+startDashboard(dashboardPort);
+
 // Load existing theme selections from the sheet
 await loadExistingThemes();
 
@@ -126,27 +144,51 @@ client.once('clientReady', async () => {
     // Store main client reference for workshop system
     setMainClient(client);
 
+    // Set client for dashboard (leader lookups)
+    setDashboardClient(client);
+
+    // Initialize Discord channel logger now that the client is ready
+    initLogger(client);
+    logSuccess("Bot Online", `Logged in as ${client.user?.tag}`);
+
+    // Cache members from the MAIN guild (role checks, leader lookups, dashboard auth)
+    const mainGuildId = process.env.GUILD_ID;
+    if (mainGuildId) {
+        try {
+            const mainGuild = await client.guilds.fetch(mainGuildId);
+            await mainGuild.members.fetch();
+            logDebug("Member Cache", `Cached ${mainGuild.members.cache.size} members from main guild`);
+        } catch (error: any) {
+            logError("Main guild member cache failed", error);
+        }
+    }
+
+    // Cache invites from the BOOTCAMP guild (invite tracking)
     const bootcampGuildId = process.env.BOOTCAMP_GUILD_ID;
     if (bootcampGuildId) {
         try {
-            const guild = await client.guilds.fetch(bootcampGuildId);
-            const invites = await guild.invites.fetch();
+            const bootcampGuild = await client.guilds.fetch(bootcampGuildId);
+            const invites = await bootcampGuild.invites.fetch();
             const inviteCache = new Map();
             invites.forEach((invite) => {
                 inviteCache.set(invite.code, { uses: invite.uses || 0 });
             });
-            client.inviteCache.set(guild.id, inviteCache);
-            console.log(`Cached ${invites.size} invites for bootcamp guild`);
-        } catch (error) {
-            console.error("Error caching invites:", error);
+            client.inviteCache.set(bootcampGuild.id, inviteCache);
+            logDebug("Invite Cache", `Cached ${invites.size} invites for bootcamp guild`);
+
+            // Also cache bootcamp guild members for participant tracking
+            await bootcampGuild.members.fetch();
+            logDebug("Member Cache", `Cached ${bootcampGuild.members.cache.size} members from bootcamp guild`);
+        } catch (error: any) {
+            logError("Bootcamp guild cache failed", error);
         }
     }
 
     // Login all 18 voice bots after main bot is ready
     try {
         await loginAllVoiceBots(client);
-    } catch (error) {
-        console.error("Error logging in voice bots:", error);
+    } catch (error: any) {
+        logError("Voice Bots Init Failed", error);
     }
 });
 

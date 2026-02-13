@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, ButtonStyle, ContainerBuilder, MessageFlags } from "discord.js";
+import { logError } from "../../utils/logger";
 
 const ADMIN_ROLE_ID = "964586364488253510";
 const ADMIN_USER_ID = "695223884735053905";
@@ -145,8 +146,8 @@ export default {
 
                 console.log(`${interaction.user.username} sent challenge embed in channel`);
             }
-        } catch (error) {
-            console.error("Error sending challenge embed:", error);
+        } catch (error: any) {
+            logError("Send challenge embed", error);
             await interaction.reply({
                 content: `❌ Failed to send the challenge embed. ${targetUser ? "The user might have DMs disabled." : ""}`,
                 ephemeral: true,

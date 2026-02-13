@@ -8,7 +8,12 @@ import {
 import { Participant } from "../database";
 import type { IParticipant } from "../database";
 import { TeamConfig } from "../data";
+import { logError } from "../utils/logger";
 import { getTeamLabel } from "./workshopManager";
+import {
+    emitParticipantJoined,
+    emitParticipantLeft,
+} from "../dashboard/socketManager";
 
 /**
  * Tracks voice activity, mic, deafen, and messages for all members
@@ -64,8 +69,8 @@ export class ActivityTracker {
                 if (member.user.bot) continue;
                 await this.handleJoin(member);
             }
-        } catch (error) {
-            console.error(`[ActivityTracker][${this.teamConfig.TeamName}] Error scanning members:`, error);
+        } catch (error: any) {
+            logError(`ActivityTracker (${this.teamConfig.TeamName}) scan`, error);
         }
     }
 
@@ -140,6 +145,13 @@ export class ActivityTracker {
         }
 
         await participant.save();
+
+        // Emit participant joined
+        emitParticipantJoined(this.teamConfig.TeamName, {
+            workshopId: this.workshopId,
+            userId: discordId,
+            username: member.user.username,
+        });
     }
 
     /**
@@ -183,6 +195,13 @@ export class ActivityTracker {
 
             await participant.save();
         }
+
+        // Emit participant left
+        emitParticipantLeft(this.teamConfig.TeamName, {
+            workshopId: this.workshopId,
+            userId: discordId,
+            username: participant?.username || discordId,
+        });
 
         this.memberState.delete(discordId);
     }

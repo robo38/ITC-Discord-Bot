@@ -1,15 +1,22 @@
 {
   "dependencies": {
     "@discordjs/voice": "^0.19.0",
+    "@discordjs/ws": "^2.0.4",
     "@snazzah/davey": "^0.1.9",
+    "@types/ejs": "^3.1.5",
+    "@types/express-session": "^1.18.2",
+    "connect-mongo": "^6.0.0",
     "csv-writer": "^1.6.0",
     "discord.js": "^14.25.0",
     "dotenv": "^17.2.3",
+    "ejs": "^4.0.1",
     "express": "^5.1.0",
+    "express-session": "^1.19.0",
     "googleapis": "^168.0.0",
     "mongoose": "^9.2.1",
     "node-cron": "^4.2.1",
     "opusscript": "^0.1.1",
+    "socket.io": "^4.8.3",
     "sodium-native": "^5.0.10",
     "xlsx": "^0.18.5"
   },

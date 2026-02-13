@@ -1,5 +1,6 @@
 import { Client, Events, GuildMember } from "discord.js";
 import { addParticipant } from "../utils/participantManager";
+import { logSuccess, logDebug, logError } from "../utils/logger";
 import fs from "fs";
 import path from "path";
 
@@ -28,9 +29,9 @@ function removeUserFromCSV(userId: string): void {
         const updatedLines = lines.filter(line => !line.startsWith(userId + ","));
         
         fs.writeFileSync(CSV_PATH, updatedLines.join("\n"));
-        console.log(`🗑️ Removed user ${userId} from CSV`);
-    } catch (error) {
-        console.error("Error removing user from CSV:", error);
+        logDebug("CSV Update", `Removed user ${userId} from CSV`);
+    } catch (error: any) {
+        logError("CSV Remove Failed", error);
     }
 }
 
@@ -46,18 +47,16 @@ export default {
 
         if (!hadRole && hasRole) {
             // Role was just added
-            console.log(`Participant role added to ${newMember.user.username} by admin`);
+            logSuccess("Role Added", `Participant role added to ${newMember.user.username} by admin`);
 
             // Check if user is already in CSV
             if (!isUserInCSV(newMember.id)) {
                 await addParticipant(newMember.id);
-                console.log(`✅ Added ${newMember.user.username} to CSV`);
-            } else {
-                console.log(`User ${newMember.user.username} already in CSV`);
+                logDebug("CSV Update", `Added ${newMember.user.username} to CSV`);
             }
         } else if (hadRole && !hasRole) {
             // Role was just removed
-            console.log(`Participant role removed from ${newMember.user.username} by admin`);
+            logDebug("Role Removed", `Participant role removed from ${newMember.user.username}`);
             removeUserFromCSV(newMember.id);
         }
     }

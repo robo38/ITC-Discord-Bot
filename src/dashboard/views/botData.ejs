@@ -1,0 +1,182 @@
+<%- include('layout') %>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <a href="/" class="navbar-brand">🤖 <span>ITC Bot Dashboard</span></a>
+    <div class="navbar-right">
+        <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
+            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+        </div>
+        <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:1400px;">
+    <div class="page-header">
+        <h1 class="page-title">📊 <%= bot.teamName %> — Data</h1>
+        <div style="display:flex; gap:8px;">
+            <a href="/bots/<%= bot._id %>" class="btn btn-outline btn-sm">← Bot Detail</a>
+            <a href="/" class="btn btn-outline btn-sm">Home</a>
+        </div>
+    </div>
+
+    <!-- Workshop list -->
+    <div class="card">
+        <h3 style="margin-bottom:14px; color:var(--accent); font-size:1rem;">Workshops</h3>
+        <% if (workshops.length === 0) { %>
+            <p style="color:var(--text-secondary); text-align:center; padding:20px;">No workshops recorded yet.</p>
+        <% } else { %>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Workshop ID</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Start</th>
+                        <th>Duration</th>
+                        <th>Participants</th>
+                        <th style="text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% workshops.forEach(function(ws) { %>
+                    <tr>
+                        <td style="font-family:monospace; font-size:0.8rem;"><%= ws.workshopId.substring(0, 12) %>...</td>
+                        <td><%= ws.type %></td>
+                        <td>
+                            <span style="color: <%= ws.status === 'active' ? 'var(--success)' : ws.status === 'completed' ? 'var(--text-secondary)' : 'var(--warning)' %>">
+                                <%= ws.status %>
+                            </span>
+                        </td>
+                        <td><%= new Date(ws.startTime).toLocaleDateString() %> <%= new Date(ws.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+                        <td><%= ws.averageDuration %> min</td>
+                        <td><%= ws.participantCount %></td>
+                        <td style="text-align:right;">
+                            <div class="actions" style="justify-content:flex-end;">
+                                <button class="btn btn-outline btn-sm view-participants-btn" data-wsid="<%= ws.workshopId %>">
+                                    👁️ View
+                                </button>
+                                <a href="/bots/<%= bot._id %>/export/<%= ws.workshopId %>" class="btn btn-outline btn-sm">
+                                    📥 Export
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        <% } %>
+    </div>
+
+    <!-- Participants detail panel (shown on click) -->
+    <div id="participantsPanel" class="card" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <h3 style="color:var(--accent); font-size:1rem;">
+                Participants — <span id="panelWsId" style="font-family:monospace; font-size:0.85rem;"></span>
+            </h3>
+            <button class="btn btn-outline btn-sm" id="closePanelBtn">✕ Close</button>
+        </div>
+
+        <div id="participantsLoading" style="text-align:center; padding:20px; color:var(--text-secondary);">
+            Loading participants...
+        </div>
+
+        <div id="participantsTable" style="display:none; overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Team</th>
+                        <th>Voice Time</th>
+                        <th>Mic Time</th>
+                        <th>Joins</th>
+                        <th>Voice Msgs</th>
+                        <th>Chat Msgs</th>
+                        <th>Stayed</th>
+                    </tr>
+                </thead>
+                <tbody id="participantsTbody"></tbody>
+            </table>
+        </div>
+
+        <div id="participantsEmpty" style="display:none; text-align:center; padding:20px; color:var(--text-secondary);">
+            No participants found for this workshop.
+        </div>
+    </div>
+</div>
+
+<script>
+    const panel = document.getElementById('participantsPanel');
+    const loading = document.getElementById('participantsLoading');
+    const table = document.getElementById('participantsTable');
+    const tbody = document.getElementById('participantsTbody');
+    const emptyMsg = document.getElementById('participantsEmpty');
+    const wsIdEl = document.getElementById('panelWsId');
+    const closeBtn = document.getElementById('closePanelBtn');
+
+    function formatMs(ms) {
+        if (ms <= 0) return '0s';
+        const s = Math.floor(ms / 1000) % 60;
+        const m = Math.floor(ms / 60000) % 60;
+        const h = Math.floor(ms / 3600000);
+        if (h > 0) return h + 'h ' + m + 'm';
+        if (m > 0) return m + 'm ' + s + 's';
+        return s + 's';
+    }
+
+    document.querySelectorAll('.view-participants-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const wsid = btn.dataset.wsid;
+            wsIdEl.textContent = wsid.substring(0, 16) + '...';
+            panel.style.display = '';
+            loading.style.display = '';
+            table.style.display = 'none';
+            emptyMsg.style.display = 'none';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            try {
+                const res = await fetch('/api/workshops/' + encodeURIComponent(wsid) + '/participants');
+                const data = await res.json();
+                loading.style.display = 'none';
+
+                if (!data.length) {
+                    emptyMsg.style.display = '';
+                    return;
+                }
+
+                tbody.innerHTML = '';
+                data.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight:600;">${escapeHtml(p.username)}</td>
+                        <td>${escapeHtml(p.teamLabel)}</td>
+                        <td>${formatMs(p.totalVoiceMs)}</td>
+                        <td>${formatMs(p.totalMicMs)}</td>
+                        <td>${p.joinCount}</td>
+                        <td>${p.voiceChatMessages}</td>
+                        <td>${p.memberChatMessages}</td>
+                        <td style="color:${p.stayedUntilEnd ? 'var(--success)' : 'var(--danger)'}">
+                            ${p.stayedUntilEnd ? 'Yes' : 'No'}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                table.style.display = '';
+            } catch (e) {
+                loading.textContent = 'Failed to load participants.';
+            }
+        });
+    });
+
+    closeBtn.addEventListener('click', () => { panel.style.display = 'none'; });
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+</script>
+
+<%- include('footer') %>

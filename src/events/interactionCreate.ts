@@ -2,6 +2,7 @@ import { Events, MessageFlags, Interaction, ModalBuilder, TextInputBuilder, Text
 import { updateParticipantTheme, hasSelectedTheme } from "../utils/participantManager";
 import { checkCommandPermission } from "../utils/permissions";
 import { continueWorkshop, stopWorkshop, parseDuration } from "../workshop";
+import { logError } from "../utils/logger";
 
 const THEME1_ROLE = process.env.THEME1_ROLE!;
 const THEME2_ROLE = process.env.THEME2_ROLE!;
@@ -15,7 +16,7 @@ export default {
             const command = interaction.client.commands.get(interaction.commandName);
 
             if (!command) {
-                console.error(`No command matching ${interaction.commandName} was found.`);
+                logError("Unknown Command", `No command matching ${interaction.commandName}`);
                 return;
             }
 
@@ -31,19 +32,21 @@ export default {
 
             try {
                 await command.run(interaction, interaction.client);
-            } catch (error) {
-                console.error(error);
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp({
-                        content: 'There was an error while executing this command!',
-                        flags: MessageFlags.Ephemeral,
-                    });
-                } else {
-                    await interaction.reply({
-                        content: 'There was an error while executing this command!',
-                        flags: MessageFlags.Ephemeral,
-                    });
-                }
+            } catch (error: any) {
+                logError(`Command /${interaction.commandName} failed`, error);
+                try {
+                    if (interaction.replied || interaction.deferred) {
+                        await interaction.followUp({
+                            content: 'There was an error while executing this command!',
+                            flags: MessageFlags.Ephemeral,
+                        });
+                    } else {
+                        await interaction.reply({
+                            content: 'There was an error while executing this command!',
+                            flags: MessageFlags.Ephemeral,
+                        });
+                    }
+                } catch {}
             }
             return;
         }
@@ -176,8 +179,8 @@ async function handleThemeSelection(interaction: any) {
             try {
                 const member = await interaction.guild.members.fetch(interaction.user.id);
                 await member.roles.add(roleId);
-            } catch (error) {
-                console.error("Error adding theme role:", error);
+            } catch (error: any) {
+                logError("Theme role add failed", error);
             }
         }
 
@@ -201,8 +204,8 @@ async function handleThemeSelection(interaction: any) {
         });
 
         console.log(`${interaction.user.username} selected theme ${themeNumber}`);
-    } catch (error) {
-        console.error("Error handling theme selection:", error);
+    } catch (error: any) {
+        logError("Theme selection failed", error);
         await interaction.reply({
             content: "❌ An error occurred while processing your selection.",
             flags: MessageFlags.Ephemeral,

@@ -1,0 +1,227 @@
+<%- include('layout') %>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <div class="navbar-logo">ITC</div>
+        <span>Bot Dashboard</span>
+    </a>
+    <div class="navbar-right">
+        <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
+            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+        </div>
+        <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
+    </div>
+</nav>
+
+<div class="container" style="max-width:1400px;">
+    <div class="page-header">
+        <h1 class="page-title">🖥️ Web Console</h1>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <a href="/" class="btn btn-outline btn-sm">← Back</a>
+        </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 16px;">
+        <span style="color:var(--text-secondary); font-size:0.85rem; font-weight:600;">Filter:</span>
+        <button class="log-filter-btn active" data-level="all">All</button>
+        <button class="log-filter-btn" data-level="error" style="--filter-color: var(--danger);">Error</button>
+        <button class="log-filter-btn" data-level="success" style="--filter-color: var(--success);">Success</button>
+        <button class="log-filter-btn" data-level="database" style="--filter-color: var(--accent);">Database</button>
+        <button class="log-filter-btn" data-level="debug" style="--filter-color: var(--text-secondary);">Debug</button>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <label class="toggle-wrapper" style="gap:8px;">
+                <label class="toggle" style="width:40px; height:22px;">
+                    <input type="checkbox" id="autoRefresh" checked />
+                    <span class="toggle-slider" style="border-radius:22px;"></span>
+                </label>
+                <span style="color:var(--text-secondary); font-size:0.82rem;">Auto-refresh</span>
+            </label>
+            <button class="btn btn-outline btn-sm" id="clearBtn">Clear</button>
+        </div>
+    </div>
+
+    <!-- Log container -->
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div id="logContainer" style="
+            max-height: calc(100vh - 260px);
+            overflow-y: auto;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+        ">
+            <div id="logEmpty" style="text-align:center; padding:40px; color:var(--text-secondary);">
+                Waiting for logs...
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .log-filter-btn {
+        padding: 4px 14px;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .log-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .log-filter-btn.active {
+        background: var(--filter-color, var(--accent));
+        color: #fff;
+        border-color: var(--filter-color, var(--accent));
+    }
+
+    .log-entry {
+        display: grid;
+        grid-template-columns: 80px 70px 1fr;
+        gap: 12px;
+        padding: 6px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        align-items: start;
+    }
+    .log-entry:hover { background: rgba(255,255,255,0.02); }
+
+    .log-time { color: var(--text-secondary); font-size: 0.78rem; white-space: nowrap; }
+    .log-level {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 4px;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .log-level-error { background: #f8717130; color: var(--danger); }
+    .log-level-success { background: #4ade8025; color: var(--success); }
+    .log-level-database { background: rgba(230,57,70,0.12); color: var(--accent); }
+    .log-level-debug { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+
+    .log-body { color: var(--text-primary); word-break: break-word; }
+    .log-body .log-title { font-weight: 600; }
+    .log-body .log-detail { color: var(--text-secondary); margin-left: 8px; }
+</style>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const container = document.getElementById('logContainer');
+    const emptyEl = document.getElementById('logEmpty');
+    const filterBtns = document.querySelectorAll('.log-filter-btn');
+    const autoRefreshCb = document.getElementById('autoRefresh');
+    const clearBtn = document.getElementById('clearBtn');
+
+    let currentLevel = 'all';
+    let lastTimestamp = 0;
+    let socket = null;
+
+    // ─── Socket.IO for live logs ─────────────────────────────────
+    function initSocket() {
+        socket = io();
+        socket.on('connect', function() {
+            socket.emit('join:console');
+        });
+        socket.on('log:new', function(log) {
+            if (currentLevel !== 'all' && log.level !== currentLevel) return;
+            if (log.timestamp <= lastTimestamp) return;
+
+            // Remove empty state
+            if (emptyEl && emptyEl.parentNode === container) {
+                container.removeChild(emptyEl);
+            }
+
+            var wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
+            container.appendChild(createLogEntry(log));
+            lastTimestamp = log.timestamp;
+
+            if (wasAtBottom) {
+                container.scrollTop = container.scrollHeight;
+            }
+        });
+    }
+
+    // Filter buttons
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentLevel = btn.dataset.level;
+            lastTimestamp = 0;
+            container.innerHTML = '';
+            fetchLogs(); // Initial load when switching filter
+        });
+    });
+
+    clearBtn.addEventListener('click', () => {
+        container.innerHTML = '';
+        emptyEl && container.appendChild(emptyEl);
+    });
+
+    function formatTime(ts) {
+        const d = new Date(ts);
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function createLogEntry(log) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.innerHTML = `
+            <span class="log-time">${formatTime(log.timestamp)}</span>
+            <span class="log-level log-level-${log.level}">${log.level}</span>
+            <span class="log-body">
+                <span class="log-title">${escapeHtml(log.title)}</span>
+                ${log.body ? '<span class="log-detail">' + escapeHtml(log.body) + '</span>' : ''}
+            </span>
+        `;
+        return div;
+    }
+
+    function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+    }
+
+    async function fetchLogs() {
+        try {
+            const url = `/api/logs?limit=200&level=${currentLevel}`;
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const logs = await res.json();
+            if (!logs.length) return;
+
+            // Remove empty state
+            if (emptyEl && emptyEl.parentNode === container) {
+                container.removeChild(emptyEl);
+            }
+
+            // Render all fetched logs
+            logs.forEach(log => container.appendChild(createLogEntry(log)));
+            lastTimestamp = Math.max(...logs.map(l => l.timestamp));
+
+            // Auto-scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        } catch (e) { /* silent */ }
+    }
+
+    // Auto-refresh toggle controls socket connection
+    autoRefreshCb.addEventListener('change', () => {
+        if (autoRefreshCb.checked) {
+            if (!socket || !socket.connected) initSocket();
+        } else {
+            if (socket) { socket.disconnect(); socket = null; }
+        }
+    });
+
+    // Initial load: fetch existing logs + connect socket
+    fetchLogs();
+    initSocket();
+</script>
+
+<%- include('footer') %>

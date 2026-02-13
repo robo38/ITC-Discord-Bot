@@ -3,6 +3,12 @@ import teamsData, { TeamConfig } from "../data";
 import { ActivityTracker } from "./activityTracker";
 import { exportWorkshopToExcel } from "./excelExport";
 import { sendMessageAsBot } from "../voice";
+import { logError, logSuccess, logDebug } from "../utils/logger";
+import {
+    emitSessionStarted,
+    emitSessionStopped,
+    emitWorkshopReminder,
+} from "../dashboard/socketManager";
 import {
     Client,
     ActionRowBuilder,
@@ -162,6 +168,14 @@ async function activateWorkshop(
     await workshop.save();
 
     console.log(`[Workshop][${teamConfig.TeamName}] Workshop ${workshopId} is now ACTIVE.`);
+    logSuccess("Workshop Active", `${teamConfig.TeamName} — ${workshopId}`);
+
+    // Emit socket event
+    emitSessionStarted(teamConfig.TeamName, {
+        workshopId,
+        leaderID: workshop.leaderID,
+        type: workshop.type,
+    });
 
     // Create activity tracker
     const tracker = new ActivityTracker(workshopId, teamConfig, mainClient);
@@ -225,8 +239,8 @@ async function notifyLeaderWorkshopEnded(
                 });
             }
         }
-    } catch (error) {
-        console.error(`[Workshop][${teamConfig.TeamName}] Error notifying leader:`, error);
+    } catch (error: any) {
+        logError(`Workshop Notify Leader (${teamConfig.TeamName})`, error);
     }
 }
 
@@ -288,9 +302,16 @@ async function sendStartReminder(
                 `<@&${teamConfig.MemberRole1ID}> Make sure to be ready! 🎯`,
         });
 
-        console.log(`[Workshop][${teamConfig.TeamName}] 30-min reminder sent.`);
-    } catch (error) {
-        console.error(`[Workshop][${teamConfig.TeamName}] Error sending reminder:`, error);
+        logDebug("Workshop Reminder", `${teamConfig.TeamName} 30-min reminder sent`);
+
+        // Emit socket event
+        emitWorkshopReminder(teamConfig.TeamName, {
+            workshopId: "", // reminder is pre-workshop, no ID yet
+            type,
+            minutesUntilStart: 30,
+        });
+    } catch (error: any) {
+        logError(`Workshop Reminder (${teamConfig.TeamName})`, error);
     }
 }
 
@@ -364,6 +385,13 @@ export async function stopWorkshop(
     });
     await session.save();
 
+    // Emit socket event
+    emitSessionStopped(workshop.teamName, {
+        workshopId,
+        totalParticipants,
+        totalDuration,
+    });
+
     // Generate Excel
     const teamConfig = teamsData.find((t) => t.TeamName === workshop.teamName);
     const filePath = await exportWorkshopToExcel(workshopId, workshop, participants);
@@ -380,8 +408,8 @@ export async function stopWorkshop(
                     `Average attendance: ${Math.round(avgAttendance / 60_000)} minutes`,
                 files: [filePath],
             });
-        } catch (error) {
-            console.error(`[Workshop] Error sending report via voice bot:`, error);
+        } catch (error: any) {
+            logError("Workshop Report Send", error);
             // Fallback: try sending via main bot
             try {
                 const channel = await mainClient.channels.fetch(teamConfig.LeaderChatChannelID);
@@ -391,8 +419,8 @@ export async function stopWorkshop(
                         files: [filePath],
                     });
                 }
-            } catch (err) {
-                console.error(`[Workshop] Fallback send also failed:`, err);
+            } catch (err: any) {
+                logError("Workshop Report Fallback", err);
             }
         }
     }

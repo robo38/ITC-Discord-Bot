@@ -6,6 +6,7 @@ import {
 import { Workshop, Participant, Session } from "../../database";
 import { BE_ID } from "../../data";
 import { DEV_USER_ID } from "../../utils/permissions";
+import { logError, logSuccess } from "../../utils/logger";
 
 export default {
     data: new SlashCommandBuilder()
@@ -54,8 +55,8 @@ export default {
                     `• **${participantResult.deletedCount}** participants\n` +
                     `• **${sessionResult.deletedCount}** sessions`
             );
-        } catch (error) {
-            console.error("[Reset] Error resetting data:", error);
+        } catch (error: any) {
+            logError("Reset command", error);
             await interaction.editReply(
                 "❌ An error occurred while resetting data. Check the logs."
             );

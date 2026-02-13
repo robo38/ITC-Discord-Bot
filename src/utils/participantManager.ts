@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { createObjectCsvWriter } from "csv-writer";
+import { logError, logDebug } from "./logger";
 
 const CSV_PATH = path.join(process.cwd(), "bootcamp_participants.csv");
 
@@ -36,8 +37,8 @@ export async function addParticipant(discordId: string) {
 
         await csvWriter.writeRecords([{ discordId, theme: "null" }]);
         console.log(`Added participant ${discordId} to CSV`);
-    } catch (error) {
-        console.error("Error adding participant:", error);
+    } catch (error: any) {
+        logError("Add participant to CSV", error);
     }
 }
 
@@ -75,8 +76,8 @@ export async function updateParticipantTheme(userId: string, theme: string) {
 
         console.log(`Updated theme for ${userId} to ${theme}`);
         return { success: true, message: "Theme selected successfully!" };
-    } catch (error) {
-        console.error("Error updating participant theme:", error);
+    } catch (error: any) {
+        logError("Update participant theme", error);
         return { success: false, message: "Error updating theme" };
     }
 }
@@ -157,8 +158,8 @@ export async function syncParticipantsFromRole(client: any) {
         }
 
         console.log(`✅ Synced participants: ${addedCount} new members added to CSV`);
-    } catch (error) {
-        console.error("Error syncing participants from role:", error);
+    } catch (error: any) {
+        logError("Sync participants from role", error);
     }
 }
 

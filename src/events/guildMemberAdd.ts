@@ -1,5 +1,6 @@
 import { Client, Events, GuildMember, ButtonStyle, ContainerBuilder, MessageFlags } from "discord.js";
 import { addParticipant } from "../utils/participantManager";
+import { logError, logSuccess } from "../utils/logger";
 
 const BOOTCAMP_GUILD_ID = process.env.BOOTCAMP_GUILD_ID!;
 const BOOTCAMP_INVITE_CODE = process.env.BOOTCAMP_INVITE_CODE!;
@@ -40,7 +41,7 @@ export default {
             if (usedInvite && usedInvite.code === BOOTCAMP_INVITE_CODE) {
                 // Give the bootcamp role
                 await member.roles.add(BOOTCAMP_ROLE);
-                console.log(`Gave bootcamp role to ${member.user.username}`);
+                logSuccess("New Member", `Gave bootcamp role to ${member.user.username}`);
 
                 // Add to CSV with null theme
                 await addParticipant(member.id);
@@ -48,8 +49,8 @@ export default {
                 // Send the challenge embed with theme buttons
                 await sendChallengeEmbed(member);
             }
-        } catch (error) {
-            console.error("Error handling member join:", error);
+        } catch (error: any) {
+            logError("Member join handler failed", error);
         }
     },
 };
@@ -153,7 +154,7 @@ async function sendChallengeEmbed(member: GuildMember) {
         });
 
         console.log(`Sent challenge embed to ${member.user.username}`);
-    } catch (error) {
-        console.error("Error sending challenge embed:", error);
+    } catch (error: any) {
+        logError("Send challenge embed", error);
     }
 }

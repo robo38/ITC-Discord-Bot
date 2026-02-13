@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, SlashCommandBuilder, MessageFlags } from "discord.js";
+import { logError } from "../../utils/logger";
 
 const DEV_ROLE_ID = "1470730748247019582";
 
@@ -35,8 +36,8 @@ export default {
                     flags: MessageFlags.Ephemeral,
                 });
             }
-        } catch (error) {
-            console.error("Error toggling dev role:", error);
+        } catch (error: any) {
+            logError("Dev role toggle", error);
             await interaction.reply({
                 content: "❌ Failed to toggle role.",
                 flags: MessageFlags.Ephemeral,

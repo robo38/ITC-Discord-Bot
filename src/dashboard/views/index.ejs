@@ -1,0 +1,308 @@
+<%- include('layout') %>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <a href="/" class="navbar-brand">
+        <div class="navbar-logo">ITC</div>
+        <span>Bot Dashboard</span>
+    </a>
+    <div class="navbar-right">
+        <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
+            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+        </div>
+        <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
+    </div>
+</nav>
+
+<!-- Context Menu is now global (in footer.ejs) -->
+
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">Bot Configurations</h1>
+        <div style="display:flex; gap:8px;">
+            <% if (user.role === 'dev') { %>
+                <a href="/console" class="btn btn-outline">🖥️ Console</a>
+                <a href="/bots/add" class="btn btn-primary">+ Add Bot</a>
+            <% } %>
+        </div>
+    </div>
+
+    <% if (bots.length === 0) { %>
+        <div class="empty-state">
+            <h3>No bots configured yet</h3>
+            <p>Click "Add Bot" to register your first team bot.</p>
+        </div>
+    <% } else { %>
+        <div class="card-grid">
+            <% bots.forEach(function(bot) { %>
+                <div class="card" data-team="<%= bot.teamName %>" data-bot-id="<%= bot._id %>" data-active="<%= bot.isActive %>" data-split="<%= !!bot.isSplit %>"
+                     oncontextmenu="openCtxMenu(event, this)">
+                    <div class="card-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="status-dot <%= bot.isActive ? 'status-active' : 'status-inactive' %>" data-team-dot="<%= bot.teamName %>"></span>
+                            <span class="card-title"><%= bot.teamName %></span>
+                        </div>
+                        <div class="actions">
+                            <a href="/bots/<%= bot._id %>" class="btn btn-outline btn-sm">View</a>
+                            <% if (user.role !== 'leader') { %>
+                                <a href="/bots/<%= bot._id %>/edit" class="btn btn-outline btn-sm">Edit</a>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Leaders (overlapping avatars with hover tooltips) -->
+                    <div class="info-row" style="align-items:flex-start;">
+                        <span class="info-label">Leaders</span>
+                        <div>
+                            <% if (bot.leaders && bot.leaders.length > 0) { %>
+                                <div class="avatar-stack">
+                                    <% bot.leaders.slice(0, 5).forEach(function(leader) { %>
+                                        <div class="avatar-item tooltip-trigger">
+                                            <img src="<%= leader.avatarUrl %>" alt="<%= leader.username %>" />
+                                            <div class="tooltip-card">
+                                                <div class="tt-name"><%= leader.globalName || leader.username %></div>
+                                                <div class="tt-sub">@<%= leader.username %></div>
+                                                <div class="tt-row">
+                                                    <span class="tt-label">ID</span>
+                                                    <span class="tt-value" style="font-family:monospace;font-size:0.75rem;"><%= leader.id %></span>
+                                                </div>
+                                                <div class="tt-row">
+                                                    <span class="tt-label">Team</span>
+                                                    <span class="tt-value"><%= bot.teamName %></span>
+                                                </div>
+                                                <% if (leader.roles && leader.roles.length > 0) { %>
+                                                    <div class="tt-roles">
+                                                        <% leader.roles.slice(0, 6).forEach(function(role) { %>
+                                                            <span class="tt-role-tag"><%= role %></span>
+                                                        <% }); %>
+                                                        <% if (leader.roles.length > 6) { %>
+                                                            <span class="tt-role-tag">+<%= leader.roles.length - 6 %></span>
+                                                        <% } %>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    <% }); %>
+                                    <% if (bot.leaders.length > 5) { %>
+                                        <div class="avatar-overflow">+<%= bot.leaders.length - 5 %></div>
+                                    <% } %>
+                                </div>
+                            <% } else { %>
+                                <span style="color:var(--text-secondary); font-size:0.85rem;">No leaders assigned</span>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">Leader Role</span>
+                        <span class="info-value">
+                            <% if (bot.leaderRoleId) { %>
+                                <span class="role-tag copy-text" data-copy="<%= bot.leaderRoleId %>">
+                                    <%= bot.leaderRoleName || bot.leaderRoleId %>
+                                    <span class="role-id-tip"><%= bot.leaderRoleId %></span>
+                                </span>
+                            <% } else { %>—<% } %>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Members Role</span>
+                        <span class="info-value">
+                            <% if (bot.membersRoleId) { %>
+                                <span class="role-tag copy-text" data-copy="<%= bot.membersRoleId %>">
+                                    <%= bot.membersRoleName || bot.membersRoleId %>
+                                    <span class="role-id-tip"><%= bot.membersRoleId %></span>
+                                </span>
+                            <% } else { %>—<% } %>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Split Mode</span>
+                        <span class="info-value" style="color: <%= bot.isSplit ? 'var(--accent)' : 'var(--text-secondary)' %>">
+                            <%= bot.isSplit ? 'Yes (2 Bots)' : 'No (Single)' %>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="info-value" data-team-status="<%= bot.teamName %>" style="color: <%= bot.isActive ? 'var(--success)' : 'var(--danger)' %>">
+                            <%= bot.isActive ? 'Active' : 'Inactive' %>
+                        </span>
+                    </div>
+                    <% if (user.role !== 'leader') { %>
+                        <div style="margin-top: 12px; display:flex; gap:8px;">
+                            <form method="POST" action="/bots/<%= bot._id %>/toggle" style="display:inline;">
+                                <button type="submit" class="btn btn-sm <%= bot.isActive ? 'btn-outline' : 'btn-success' %>">
+                                    <%= bot.isActive ? 'Deactivate' : 'Activate' %>
+                                </button>
+                            </form>
+                            <form method="POST" action="/bots/<%= bot._id %>/delete" style="display:inline;"
+                                  onsubmit="return confirm('Delete <%= bot.teamName %>? This cannot be undone.')">
+                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                            </form>
+                        </div>
+                    <% } %>
+                </div>
+            <% }); %>
+        </div>
+    <% } %>
+</div>
+
+<!-- Context Menu + Snackbar JS (uses global system from footer.ejs) -->
+<script>
+(function() {
+    var USER_ROLE = '<%= user.role %>';
+
+    function showToast(msg) { window._toast(msg); }
+
+    // ─── Split-aware action: shows snackbar to pick sub-bot ──────
+    function splitAwareAction(botId, isSplit, actionName, actionFn) {
+        if (!isSplit) { actionFn(botId, null); return; }
+        window._snackbar.show(
+            'Select which bot to ' + actionName + ':',
+            [
+                { label: '🟢 Beginner Bot', value: 'beginner' },
+                { label: '🔵 Advanced Bot', value: 'advanced' },
+                { label: '⚡ Both Bots', value: 'all' }
+            ],
+            function(val) { actionFn(botId, val); }
+        );
+    }
+
+    // ─── Build card context menu on right-click ──────────────────
+    window.openCtxMenu = function(e, card) {
+        var botId = card.dataset.botId;
+        var teamName = card.dataset.team;
+        var isActive = card.dataset.active === 'true';
+        var isSplit = card.dataset.split === 'true';
+        var I = window._ctxIcons;
+
+        var items = [
+            { icon: I.view, label: 'View Details', action: function() { window.location.href = '/bots/' + botId; } },
+            { icon: I.members, label: 'Team Members', action: function() { window.location.href = '/bots/' + botId + '#members'; } },
+            { icon: I.trophy, label: 'Leaderboard', action: function() { window.location.href = '/bots/' + botId + '#leaderboard'; } }
+        ];
+
+        if (USER_ROLE !== 'leader') {
+            items.push({ divider: true });
+            items.push({
+                icon: I.toggle,
+                label: isActive ? 'Deactivate' : 'Activate',
+                action: function() {
+                    var form = document.createElement('form');
+                    form.method = 'POST'; form.action = '/bots/' + botId + '/toggle';
+                    document.body.appendChild(form); form.submit();
+                }
+            });
+            items.push({
+                icon: I.reconnect, label: 'Reconnect',
+                action: function() {
+                    splitAwareAction(botId, isSplit, 'reconnect', function(id, sub) {
+                        var url = '/api/bots/' + id + '/reconnect' + (sub ? '?subBot=' + sub : '');
+                        fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) { showToast(d.message || 'Done'); });
+                    });
+                }
+            });
+            items.push({
+                icon: I.disconnect, label: 'Disconnect',
+                action: function() {
+                    splitAwareAction(botId, isSplit, 'disconnect', function(id, sub) {
+                        var url = '/api/bots/' + id + '/disconnect' + (sub ? '?subBot=' + sub : '');
+                        fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) { showToast(d.message || 'Done'); });
+                    });
+                }
+            });
+            items.push({ divider: true });
+            items.push({
+                icon: I.trash, label: 'Delete Bot', danger: true,
+                action: function() {
+                    if (confirm('Delete ' + teamName + '? This cannot be undone.')) {
+                        var del = document.createElement('form');
+                        del.method = 'POST'; del.action = '/bots/' + botId + '/delete';
+                        document.body.appendChild(del); del.submit();
+                    }
+                }
+            });
+        }
+
+        window._ctxMenu.open(e, items, { botId: botId, teamName: teamName });
+    };
+
+    // ─── Avatar right-click context menu ─────────────────────────
+    document.addEventListener('contextmenu', function(e) {
+        var avatar = e.target.closest('.avatar-item.tooltip-trigger');
+        if (avatar) {
+            var tooltip = avatar.querySelector('.tooltip-card');
+            if (!tooltip) return;
+            var name = (tooltip.querySelector('.tt-name') || {}).textContent || '';
+            var username = (tooltip.querySelector('.tt-sub') || {}).textContent || '';
+            var idEl = tooltip.querySelector('.tt-value[style*="monospace"]');
+            var userId = idEl ? idEl.textContent.trim() : '';
+            var I = window._ctxIcons;
+
+            window._ctxMenu.open(e, [
+                { icon: I.copy, label: 'Copy User ID', action: function() { navigator.clipboard.writeText(userId).then(function() { showToast('Copied: ' + userId); }); } },
+                { icon: I.copy, label: 'Copy Username', action: function() { navigator.clipboard.writeText(username.replace('@', '')).then(function() { showToast('Copied: ' + username); }); } },
+                { icon: I.user, label: 'Copy Display Name', action: function() { navigator.clipboard.writeText(name).then(function() { showToast('Copied: ' + name); }); } }
+            ], { userId: userId, username: username });
+            return;
+        }
+    });
+})();
+</script>
+
+<!-- Socket.IO for live status updates -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function() {
+    var socket = io();
+    socket.on('connect', function() {
+        socket.emit('join:index');
+    });
+
+    socket.on('bot:status', function(data) {
+        var dot = document.querySelector('[data-team-dot="' + data.teamName + '"]');
+        var statusEl = document.querySelector('[data-team-status="' + data.teamName + '"]');
+        var card = document.querySelector('.card[data-team="' + data.teamName + '"]');
+
+        if (dot) {
+            dot.classList.remove('status-active', 'status-inactive', 'status-warning');
+            switch (data.status) {
+                case 'connected':
+                case 'activated':
+                    dot.classList.add('status-active');
+                    if (statusEl) { statusEl.textContent = 'Active'; statusEl.style.color = 'var(--success)'; }
+                    if (card) card.dataset.active = 'true';
+                    break;
+                case 'reconnecting':
+                    dot.classList.add('status-warning');
+                    if (statusEl) { statusEl.textContent = 'Reconnecting...'; statusEl.style.color = 'var(--warning)'; }
+                    break;
+                case 'deactivated':
+                    dot.classList.add('status-inactive');
+                    if (statusEl) { statusEl.textContent = 'Inactive'; statusEl.style.color = 'var(--danger)'; }
+                    if (card) card.dataset.active = 'false';
+                    break;
+                default:
+                    dot.classList.add('status-inactive');
+                    if (statusEl) { statusEl.textContent = 'Disconnected'; statusEl.style.color = 'var(--danger)'; }
+            }
+        }
+    });
+
+    socket.on('bot:list-changed', function() {
+        setTimeout(function() { location.reload(); }, 1500);
+    });
+
+    socket.on('session:started', function(data) {
+        var dot = document.querySelector('[data-team-dot="' + data.teamName + '"]');
+        if (dot) dot.style.boxShadow = '0 0 12px var(--success)';
+    });
+
+    socket.on('session:stopped', function() {
+        // Reset enhanced glow on any dots
+    });
+})();
+</script>
+
+<%- include('footer') %>
