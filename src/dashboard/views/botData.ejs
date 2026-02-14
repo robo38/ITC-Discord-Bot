@@ -2,12 +2,18 @@
 
 <!-- Navbar -->
 <nav class="navbar">
-    <a href="/" class="navbar-brand">🤖 <span>ITC Bot Dashboard</span></a>
-    <div class="navbar-right">
+    <a href="/" class="navbar-brand">
+        <div class="navbar-logo">ITC</div>
+        <span>Bot Dashboard</span>
+    </a>
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-right navbar-links" id="navLinks">
         <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
         <div style="display:flex; align-items:center; gap:8px;">
             <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
-            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;" class="hide-mobile"><%= user.globalName || user.username %></span>
         </div>
         <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
     </div>
@@ -15,7 +21,7 @@
 
 <div class="container" style="max-width:1400px;">
     <div class="page-header">
-        <h1 class="page-title">📊 <%= bot.teamName %> — Data</h1>
+        <h1 class="page-title"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><%= bot.teamName %> — Data</h1>
         <div style="display:flex; gap:8px;">
             <a href="/bots/<%= bot._id %>" class="btn btn-outline btn-sm">← Bot Detail</a>
             <a href="/" class="btn btn-outline btn-sm">Home</a>
@@ -56,10 +62,10 @@
                         <td style="text-align:right;">
                             <div class="actions" style="justify-content:flex-end;">
                                 <button class="btn btn-outline btn-sm view-participants-btn" data-wsid="<%= ws.workshopId %>">
-                                    👁️ View
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>View
                                 </button>
                                 <a href="/bots/<%= bot._id %>/export/<%= ws.workshopId %>" class="btn btn-outline btn-sm">
-                                    📥 Export
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export
                                 </a>
                             </div>
                         </td>
@@ -76,7 +82,7 @@
             <h3 style="color:var(--accent); font-size:1rem;">
                 Participants — <span id="panelWsId" style="font-family:monospace; font-size:0.85rem;"></span>
             </h3>
-            <button class="btn btn-outline btn-sm" id="closePanelBtn">✕ Close</button>
+            <button class="btn btn-outline btn-sm" id="closePanelBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Close</button>
         </div>
 
         <div id="participantsLoading" style="text-align:center; padding:20px; color:var(--text-secondary);">

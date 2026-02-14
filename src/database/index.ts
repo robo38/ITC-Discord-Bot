@@ -7,3 +7,11 @@ export { Session } from "./models/Session";
 export type { ISession } from "./models/Session";
 export { BotConfig } from "./models/BotConfig";
 export type { IBotConfig, ISplitConfig } from "./models/BotConfig";
+export { Whitelist } from "./models/Whitelist";
+export type { IWhitelist } from "./models/Whitelist";
+export {
+    toTeamConfig,
+    getAllTeamConfigs,
+    getTeamConfigByName,
+    getTeamConfigByLeaderRole,
+} from "./teamHelpers";

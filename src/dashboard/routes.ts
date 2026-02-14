@@ -3,6 +3,7 @@ import { BotConfig } from "../database/models/BotConfig";
 import { Workshop } from "../database/models/Workshop";
 import { Participant } from "../database/models/Participant";
 import { Session } from "../database/models/Session";
+import { Whitelist } from "../database/models/Whitelist";
 import { requireAuth, AuthRequest, DashboardUser } from "./auth";
 import { getOAuthUrl, exchangeCode, getOAuthUser, avatarUrl } from "./discord";
 import { getDashboardClient } from "./server";
@@ -15,16 +16,40 @@ import {
     activateVoiceBot,
     updateBotProfile,
     loginSingleVoiceBot,
+    getVoiceBot,
 } from "../voice";
 import { createWorkshop, stopWorkshop } from "../workshop";
 import { botConfigToTeamConfigs } from "./loadConfigs";
-import { emitBotDataUpdate, emitBotListChange, emitBotStatus } from "./socketManager";
+import { emitBotDataUpdate, emitBotListChange, emitBotStatus, addLoginLog, getLoginLog, getOnlineUsers, kickUser } from "./socketManager";
+import { resolveMeta } from "./metaData";
 
 export const dashboardRouter = Router();
 
 const DEV_USER_ID = process.env.DEV_USER_ID || "";
 const BE_ID = process.env.BE_ID || "";
+const ADMIN_ID = process.env.ADMIN_ID || "";
 const GUILD_ID = process.env.GUILD_ID || "";
+
+// Middleware: set res.locals.hasDevAccess for every authenticated request
+dashboardRouter.use(async (req: AuthRequest, res: Response, next) => {
+    const sessionUser = (req.session as any)?.user as DashboardUser | undefined;
+    if (sessionUser) {
+        res.locals.hasDevAccess = await hasDevAccess(sessionUser);
+    }
+    next();
+});
+
+/** Check if user has dev-panel access (dev role OR whitelisted) */
+async function hasDevAccess(user: DashboardUser): Promise<boolean> {
+    if (user.role === "dev") return true;
+    const wl = await Whitelist.findOne({ discordId: user.discordId }).lean();
+    return !!wl;
+}
+
+/** Check if user is the actual dev (not just whitelisted) */
+function isDevOwner(user: DashboardUser): boolean {
+    return user.role === "dev";
+}
 
 function getRedirectUri(req: Request): string {
     const base = (process.env.DASHBOARD_URL || `${req.protocol}://${req.get("host")}`).trim();
@@ -85,7 +110,7 @@ function resolveChannelName(channelId: string): string {
 
 // ─── Login ───────────────────────────────────────────────────────────
 dashboardRouter.get("/login", (req: Request, res: Response) => {
-    res.render("login", { oauthUrl: getOAuthUrl(getRedirectUri(req)), error: null });
+    res.render("login", { oauthUrl: getOAuthUrl(getRedirectUri(req)), error: null, meta: resolveMeta("login") });
 });
 
 // ─── OAuth2 Callback ─────────────────────────────────────────────────
@@ -94,7 +119,7 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
     const redirectUri = getRedirectUri(req);
 
     if (!code) {
-        res.render("login", { oauthUrl: getOAuthUrl(redirectUri), error: "No authorization code received." });
+        res.render("login", { oauthUrl: getOAuthUrl(redirectUri), error: "No authorization code received.", meta: resolveMeta("login") });
         return;
     }
 
@@ -104,7 +129,6 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
 
         // Get guild member roles & permissions via bot client cache
         let userRoleIds: string[] = [];
-        let hasAdminPerm = false;
         const client = getDashboardClient();
         if (client && GUILD_ID) {
             try {
@@ -112,8 +136,7 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
                 if (guild) {
                     const member = await guild.members.fetch(discordUser.id);
                     userRoleIds = member.roles.cache.map(r => r.id);
-                    hasAdminPerm = member.permissions.has("Administrator");
-                    logDebug("Dashboard Login", `${discordUser.username} roles=[${userRoleIds.length}] admin=${hasAdminPerm}`);
+                    logDebug("Dashboard Login", `${discordUser.username} roles=[${userRoleIds.length}]`);
                 } else {
                     logDebug("Dashboard Login", `Guild ${GUILD_ID} not in cache`);
                 }
@@ -125,16 +148,16 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
         }
 
         // Determine dashboard role
-        // Priority: dev (specific user) > be (role) > admin (permission) > leader (role)
+        // Priority: DEV > ADMIN > BE > LEADER
         let role: "dev" | "be" | "admin" | "leader";
         let leaderTeamIds: string[] = [];
 
         if (discordUser.id === DEV_USER_ID) {
             role = "dev";
+        } else if (ADMIN_ID && userRoleIds.includes(ADMIN_ID)) {
+            role = "admin";
         } else if (BE_ID && userRoleIds.includes(BE_ID)) {
             role = "be";
-        } else if (hasAdminPerm) {
-            role = "admin";
         } else {
             // Check leader roles against BotConfig
             const allConfigs = await BotConfig.find({ isActive: true }).lean();
@@ -151,6 +174,7 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
                 res.render("login", {
                     oauthUrl: getOAuthUrl(redirectUri),
                     error: "Access denied. You need BE role, Admin permission, or a team leader role.",
+                    meta: resolveMeta("login"),
                 });
                 return;
             }
@@ -165,12 +189,24 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
             leaderTeamIds,
         };
         (req.session as any).user = sessionUser;
+
+        // Log the login event for dev panel
+        addLoginLog({
+            discordId: sessionUser.discordId,
+            username: sessionUser.username,
+            globalName: sessionUser.globalName,
+            avatarUrl: sessionUser.avatarUrl,
+            role: sessionUser.role,
+        });
+        logSuccess("Dashboard Login", `${sessionUser.globalName} (${sessionUser.role}) logged in`);
+
         res.redirect("/");
     } catch (err: any) {
         logError("Dashboard OAuth", err);
         res.render("login", {
             oauthUrl: getOAuthUrl(redirectUri),
             error: err.message || "Login failed. Please try again.",
+            meta: resolveMeta("login"),
         });
     }
 });
@@ -197,21 +233,33 @@ dashboardRouter.get("/", requireAuth, async (req: AuthRequest, res: Response) =>
         bots = await BotConfig.find().sort({ teamName: 1 }).lean();
     }
 
-    // Attach leaders from Discord cache
-    const botsWithLeaders = bots.map(bot => ({
-        ...bot,
-        leaders: getLeadersFromCache(bot.leaderRoleId),
-        leaderRoleName: resolveRoleName(bot.leaderRoleId),
-        membersRoleName: resolveRoleName(bot.membersRoleId),
-    }));
+    // Check active workshops for glow indicator
+    const activeWorkshopTeams = new Set<string>();
+    const activeWsList = await Workshop.find({ status: "active" }, { teamName: 1 }).lean();
+    for (const ws of activeWsList) activeWorkshopTeams.add(ws.teamName);
 
-    res.render("index", { bots: botsWithLeaders, user });
+    // Attach leaders from Discord cache
+    const botsWithLeaders = bots.map(bot => {
+        // For split bots, check both expanded team names
+        const hasActiveWorkshop = bot.isSplit
+            ? activeWorkshopTeams.has(`${bot.teamName} (Beginner)`) || activeWorkshopTeams.has(`${bot.teamName} (Advanced)`)
+            : activeWorkshopTeams.has(bot.teamName);
+        return {
+            ...bot,
+            leaders: getLeadersFromCache(bot.leaderRoleId),
+            leaderRoleName: resolveRoleName(bot.leaderRoleId),
+            membersRoleName: resolveRoleName(bot.membersRoleId),
+            hasActiveWorkshop,
+        };
+    });
+
+    res.render("index", { bots: botsWithLeaders, user, meta: resolveMeta("index") });
 });
 
 // ─── Add bot ─────────────────────────────────────────────────────────
 dashboardRouter.get("/bots/add", requireAuth, async (req: AuthRequest, res: Response) => {
     if (req.user!.role === "leader") { res.redirect("/"); return; }
-    res.render("addBot", { user: req.user, error: null });
+    res.render("addBot", { user: req.user, error: null, meta: resolveMeta("addBot") });
 });
 
 dashboardRouter.post("/bots/add", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -267,7 +315,7 @@ dashboardRouter.post("/bots/add", requireAuth, async (req: AuthRequest, res: Res
 
         res.redirect("/");
     } catch (err: any) {
-        res.render("addBot", { user: req.user, error: err.message || "Failed to add bot" });
+        res.render("addBot", { user: req.user, error: err.message || "Failed to add bot", meta: resolveMeta("addBot") });
     }
 });
 
@@ -322,6 +370,9 @@ dashboardRouter.get("/bots/:id", requireAuth, async (req: AuthRequest, res: Resp
         voiceChannelName: resolveChannelName(bot.voiceChannelId || ""),
     };
 
+    // Online leader IDs for green dot indicators
+    const onlineUserIds = getOnlineUsers().map(u => u.discordId);
+
     res.render("botDetail", {
         bot: { ...bot, leaders: leadersWithStats },
         workshops: workshopsWithCount,
@@ -329,6 +380,8 @@ dashboardRouter.get("/bots/:id", requireAuth, async (req: AuthRequest, res: Resp
         user: req.user,
         resolvedRoles,
         resolvedChannels,
+        onlineUserIds,
+        meta: resolveMeta("botDetail", bot.teamName),
     });
 });
 
@@ -337,7 +390,17 @@ dashboardRouter.get("/bots/:id/edit", requireAuth, async (req: AuthRequest, res:
     if (req.user!.role === "leader") { res.redirect("/"); return; }
     const bot = await BotConfig.findById(req.params.id).lean();
     if (!bot) { res.redirect("/"); return; }
-    res.render("editBot", { bot, user: req.user, error: null });
+
+    // Resolve the bot's current Discord avatar
+    let botAvatarUrl = "/public/assets/default.png";
+    try {
+        const voiceBot = getVoiceBot(bot.isSplit ? `${bot.teamName} (Beginner)` : bot.teamName);
+        if (voiceBot && (voiceBot as any).client?.user) {
+            botAvatarUrl = (voiceBot as any).client.user.displayAvatarURL({ size: 128, extension: "png" });
+        }
+    } catch { /* fallback to default */ }
+
+    res.render("editBot", { bot, user: req.user, error: null, botAvatarUrl, meta: resolveMeta("editBot", bot.teamName) });
 });
 
 dashboardRouter.post("/bots/:id/edit", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -399,7 +462,7 @@ dashboardRouter.post("/bots/:id/edit", requireAuth, async (req: AuthRequest, res
         res.redirect(`/bots/${req.params.id}`);
     } catch (err: any) {
         const bot = await BotConfig.findById(req.params.id).lean();
-        res.render("editBot", { bot, user: req.user, error: err.message || "Failed to update" });
+        res.render("editBot", { bot, user: req.user, error: err.message || "Failed to update", botAvatarUrl: "/public/assets/default.png", meta: resolveMeta("editBot") });
     }
 });
 
@@ -441,14 +504,13 @@ dashboardRouter.post("/bots/:id/toggle", requireAuth, async (req: AuthRequest, r
     res.redirect("/");
 });
 
-// ─── Web Console (dev only) ─────────────────────────────────────────
-dashboardRouter.get("/console", requireAuth, async (req: AuthRequest, res: Response) => {
-    if (req.user!.role !== "dev") { res.redirect("/"); return; }
-    res.render("console", { user: req.user });
+// ─── Web Console (redirect to dev) ──────────────────────────────────
+dashboardRouter.get("/console", requireAuth, (req: AuthRequest, res: Response) => {
+    res.redirect("/dev");
 });
 
 dashboardRouter.get("/api/logs", requireAuth, async (req: AuthRequest, res: Response) => {
-    if (req.user!.role !== "dev") { res.status(403).json({ error: "Forbidden" }); return; }
+    if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const level = req.query.level as string | undefined;
     let logs = getWebLogs(limit);
@@ -456,6 +518,241 @@ dashboardRouter.get("/api/logs", requireAuth, async (req: AuthRequest, res: Resp
         logs = logs.filter(l => l.level === level);
     }
     res.json(logs);
+});
+
+// ─── Dev Panel (dev or whitelisted) ──────────────────────────────────
+dashboardRouter.get("/dev", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!(await hasDevAccess(req.user!))) { res.redirect("/"); return; }
+    const bots = await BotConfig.find().sort({ teamName: 1 }).lean();
+    const whitelistIds = (await Whitelist.find().lean()).map(w => w.discordId);
+    res.render("dev", { user: req.user, bots, whitelistIds, meta: resolveMeta("dev") });
+});
+
+// Login log API
+dashboardRouter.get("/api/dev/login-log", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
+    res.json(getLoginLog());
+});
+
+// All registered users with online/offline status (includes leaders + BE)
+dashboardRouter.get("/api/dev/all-users", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
+    const loginLog = getLoginLog();
+    const onlineUsers = getOnlineUsers();
+    const onlineIds = new Set(onlineUsers.map(u => u.discordId));
+
+    // Deduplicate by discordId, keep most recent entry
+    const seen = new Map<string, any>();
+    for (const entry of loginLog) {
+        if (!seen.has(entry.discordId)) {
+            seen.set(entry.discordId, {
+                discordId: entry.discordId,
+                username: entry.username,
+                globalName: entry.globalName,
+                avatarUrl: entry.avatarUrl,
+                role: entry.role,
+                lastSeen: entry.timestamp,
+                isOnline: onlineIds.has(entry.discordId),
+                currentPage: onlineUsers.find(u => u.discordId === entry.discordId)?.currentPage || null,
+            });
+        }
+    }
+    // Add any online users not in login log
+    for (const u of onlineUsers) {
+        if (!seen.has(u.discordId)) {
+            seen.set(u.discordId, {
+                discordId: u.discordId,
+                username: u.username,
+                globalName: u.globalName,
+                avatarUrl: u.avatarUrl,
+                role: u.role,
+                lastSeen: u.connectedAt,
+                isOnline: true,
+                currentPage: u.currentPage,
+            });
+        }
+    }
+
+    // Include all leaders from all active teams + BE user from Discord cache
+    // Collect leader role IDs for priority resolution
+    const leaderRoleIdSet = new Set<string>();
+    try {
+        const allConfigs = await BotConfig.find({ isActive: true }).lean();
+        const client = getDashboardClient();
+        const guild = client && GUILD_ID ? client.guilds.cache.get(GUILD_ID) : null;
+
+        for (const cfg of allConfigs) {
+            if (cfg.leaderRoleId) leaderRoleIdSet.add(cfg.leaderRoleId);
+        }
+
+        /** Resolve highest-priority role for a guild member.
+         *  Priority: DEV > ADMIN > BE > LEADER */
+        function resolveMemberRole(member: import("discord.js").GuildMember): "dev" | "admin" | "be" | "leader" {
+            if (member.id === DEV_USER_ID) return "dev";
+            if (ADMIN_ID && member.roles.cache.has(ADMIN_ID)) return "admin";
+            if (BE_ID && member.roles.cache.has(BE_ID)) return "be";
+            return "leader";
+        }
+
+        if (guild) {
+            // Add leaders from all teams
+            for (const cfg of allConfigs) {
+                if (!cfg.leaderRoleId) continue;
+                const role = guild.roles.cache.get(cfg.leaderRoleId);
+                if (!role) continue;
+                for (const [, member] of role.members) {
+                    if (!seen.has(member.id)) {
+                        seen.set(member.id, {
+                            discordId: member.id,
+                            username: member.user.username,
+                            globalName: member.displayName,
+                            avatarUrl: member.user.displayAvatarURL({ size: 64, extension: "png" }),
+                            role: resolveMemberRole(member),
+                            lastSeen: null,
+                            isOnline: onlineIds.has(member.id),
+                            currentPage: onlineUsers.find(u => u.discordId === member.id)?.currentPage || null,
+                        });
+                    }
+                }
+            }
+
+            // Add BE user if defined
+            if (BE_ID) {
+                const beRole = guild.roles.cache.get(BE_ID);
+                if (beRole) {
+                    for (const [, member] of beRole.members) {
+                        if (!seen.has(member.id)) {
+                            seen.set(member.id, {
+                                discordId: member.id,
+                                username: member.user.username,
+                                globalName: member.displayName,
+                                avatarUrl: member.user.displayAvatarURL({ size: 64, extension: "png" }),
+                                role: resolveMemberRole(member),
+                                lastSeen: null,
+                                isOnline: onlineIds.has(member.id),
+                                currentPage: onlineUsers.find(u => u.discordId === member.id)?.currentPage || null,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Add Admin role members if defined
+            if (ADMIN_ID) {
+                const adminRole = guild.roles.cache.get(ADMIN_ID);
+                if (adminRole) {
+                    for (const [, member] of adminRole.members) {
+                        if (!seen.has(member.id)) {
+                            seen.set(member.id, {
+                                discordId: member.id,
+                                username: member.user.username,
+                                globalName: member.displayName,
+                                avatarUrl: member.user.displayAvatarURL({ size: 64, extension: "png" }),
+                                role: resolveMemberRole(member),
+                                lastSeen: null,
+                                isOnline: onlineIds.has(member.id),
+                                currentPage: onlineUsers.find(u => u.discordId === member.id)?.currentPage || null,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    } catch { /* silent */ }
+
+    // Add whitelist status
+    const whitelistEntries = await Whitelist.find().lean();
+    const whitelistIds = new Set(whitelistEntries.map(w => w.discordId));
+
+    // Sort: online first, then by role priority (DEV > ADMIN > BE > LEADER), then by lastSeen
+    const rolePriority: Record<string, number> = { dev: 0, admin: 1, be: 2, leader: 3 };
+    const users = Array.from(seen.values()).map(u => ({
+        ...u,
+        isWhitelisted: whitelistIds.has(u.discordId),
+    })).sort((a, b) => {
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        const rp = (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99);
+        if (rp !== 0) return rp;
+        if (a.lastSeen && b.lastSeen) return b.lastSeen - a.lastSeen;
+        return a.lastSeen ? -1 : b.lastSeen ? 1 : 0;
+    });
+    res.json(users);
+});
+
+// Kick (force-logout) a user from the dashboard
+dashboardRouter.post("/api/dev/kick", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isDevOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const { discordId } = req.body;
+    if (!discordId) { res.status(400).json({ error: "Missing discordId" }); return; }
+    const kicked = kickUser(discordId);
+    res.json({ success: true, kicked });
+});
+
+// ─── Whitelist management (dev owner only) ───────────────────────────
+dashboardRouter.post("/api/dev/whitelist/add", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isDevOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const { discordId } = req.body;
+    if (!discordId) { res.status(400).json({ error: "Missing discordId" }); return; }
+    try {
+        await Whitelist.findOneAndUpdate(
+            { discordId },
+            { discordId, addedBy: req.user!.discordId },
+            { upsert: true }
+        );
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashboardRouter.post("/api/dev/whitelist/remove", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isDevOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const { discordId } = req.body;
+    if (!discordId) { res.status(400).json({ error: "Missing discordId" }); return; }
+    await Whitelist.deleteOne({ discordId });
+    res.json({ success: true });
+});
+
+dashboardRouter.get("/api/dev/whitelist", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
+    const list = await Whitelist.find().lean();
+    res.json(list);
+});
+
+// Bot reconnect API (dev only)
+dashboardRouter.post("/api/bots/:id/reconnect", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isDevOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const bot = await BotConfig.findById(req.params.id).lean();
+    if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
+    try {
+        if (bot.isSplit) {
+            await reconnectVoiceBot(`${bot.teamName} (Beginner)`);
+            await reconnectVoiceBot(`${bot.teamName} (Advanced)`);
+        } else {
+            await reconnectVoiceBot(bot.teamName);
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Bot disconnect API (dev only)
+dashboardRouter.post("/api/bots/:id/disconnect", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isDevOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const bot = await BotConfig.findById(req.params.id).lean();
+    if (!bot) { res.status(404).json({ error: "Bot not found" }); return; }
+    try {
+        if (bot.isSplit) {
+            await disconnectVoiceBot(`${bot.teamName} (Beginner)`);
+            await disconnectVoiceBot(`${bot.teamName} (Advanced)`);
+        } else {
+            await disconnectVoiceBot(bot.teamName);
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ─── Live Data View ──────────────────────────────────────────────────
@@ -480,7 +777,7 @@ dashboardRouter.get("/bots/:id/data", requireAuth, async (req: AuthRequest, res:
         return { ...ws, participantCount };
     }));
 
-    res.render("botData", { bot, workshops: workshopData, user: req.user });
+    res.render("botData", { bot, workshops: workshopData, user: req.user, meta: resolveMeta("botData", bot.teamName) });
 });
 
 // ─── Workshop Participants (AJAX) ────────────────────────────────────
@@ -693,7 +990,7 @@ dashboardRouter.post("/api/bots/:id/workshop/start", requireAuth, async (req: Au
         res.status(403).json({ error: "Forbidden" }); return;
     }
 
-    const { type, duration, startTime: startTimeStr } = req.body;
+    const { type, duration, startTime: startTimeStr, subBot } = req.body;
     if (!type || !duration) { res.status(400).json({ error: "Missing type or duration" }); return; }
 
     const mainClient = getDashboardClient();
@@ -701,7 +998,9 @@ dashboardRouter.post("/api/bots/:id/workshop/start", requireAuth, async (req: Au
 
     // Build TeamConfig from BotConfig
     const teamConfigs = botConfigToTeamConfigs(bot);
-    const teamConfig = teamConfigs[0]; // Use primary config
+    // For split bots, subBot selects Beginner (0) or Advanced (1); default to 0
+    const configIndex = bot.isSplit ? (subBot === 1 ? 1 : 0) : 0;
+    const teamConfig = teamConfigs[configIndex];
     if (!teamConfig) { res.status(404).json({ error: "Team config not found" }); return; }
 
     // Use provided start time or default to now
@@ -766,6 +1065,15 @@ dashboardRouter.get("/api/bots/:id/members", requireAuth, async (req: AuthReques
         const membersRoleId = bot.membersRoleId;
         const additionalRoleId = bot.additionalMembersRoleId;
 
+        // Build split-aware team name query
+        const memberTeamQuery = bot.isSplit
+            ? { $in: [`${bot.teamName} (Beginner)`, `${bot.teamName} (Advanced)`, bot.teamName] }
+            : bot.teamName;
+
+        // Get all workshop IDs for this team
+        const teamWorkshops = await Workshop.find({ teamName: memberTeamQuery }).lean();
+        const teamWorkshopIds = teamWorkshops.map(w => w.workshopId);
+
         // Fetch guild members with the team's roles
         const guildMembers = guild.members.cache.filter(m => {
             if (m.user.bot) return false;
@@ -777,7 +1085,10 @@ dashboardRouter.get("/api/bots/:id/members", requireAuth, async (req: AuthReques
         // For each member, aggregate their workshop participation stats
         const memberData = await Promise.all(
             guildMembers.map(async (member) => {
-                const participants = await Participant.find({ discordId: member.id, teamLabel: { $regex: bot.teamName, $options: "i" } }).lean();
+                const participants = await Participant.find({
+                    discordId: member.id,
+                    workshopId: { $in: teamWorkshopIds },
+                }).lean();
                 let totalVoiceMs = 0, totalMicMs = 0, totalMsgs = 0, workshopsJoined = 0, stayedCount = 0;
 
                 for (const p of participants) {
@@ -842,7 +1153,6 @@ dashboardRouter.get("/api/bots/:id/leaderboard", requireAuth, async (req: AuthRe
         const workshopIds = sessions.map(s => s.workshopId);
         const participants = await Participant.find({
             workshopId: { $in: workshopIds },
-            teamLabel: { $regex: bot.teamName, $options: "i" },
         }).lean();
 
         // Aggregate per member

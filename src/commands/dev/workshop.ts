@@ -1,16 +1,21 @@
 import {
     ChatInputCommandInteraction,
+    AutocompleteInteraction,
     SlashCommandBuilder,
     Client,
     EmbedBuilder,
 } from "discord.js";
-import teamsData from "../../data";
+import {
+    Workshop,
+    getAllTeamConfigs,
+    getTeamConfigByName,
+} from "../../database";
+
 import {
     createWorkshop,
     stopWorkshop,
     getAllActiveTrackers,
 } from "../../workshop";
-import { Workshop } from "../../database";
 
 export default {
     data: new SlashCommandBuilder()
@@ -32,12 +37,7 @@ export default {
                 .setName("team")
                 .setDescription("Team name (required for start/stop)")
                 .setRequired(false)
-                .addChoices(
-                    ...teamsData.map((t) => ({
-                        name: t.TeamName,
-                        value: t.TeamName,
-                    }))
-                )
+                .setAutocomplete(true)
         )
         .addStringOption((option) =>
             option
@@ -56,6 +56,17 @@ export default {
                 .setDescription("Duration (for start, e.g. 1h30, 2h, 45m). Default: 1h30")
                 .setRequired(false)
         ),
+
+    async autocomplete(interaction: AutocompleteInteraction) {
+        const focused = interaction.options.getFocused().toLowerCase();
+        const teams = await getAllTeamConfigs();
+        const filtered = teams
+            .filter((t) => t.TeamName.toLowerCase().includes(focused))
+            .slice(0, 25);
+        await interaction.respond(
+            filtered.map((t) => ({ name: t.TeamName, value: t.TeamName }))
+        );
+    },
 
     async run(interaction: ChatInputCommandInteraction, client: Client) {
         await interaction.deferReply({ ephemeral: true });
@@ -120,7 +131,7 @@ export default {
             );
         }
 
-        const teamConfig = teamsData.find((t) => t.TeamName === teamName);
+        const teamConfig = await getTeamConfigByName(teamName);
         if (!teamConfig) {
             return interaction.editReply("❌ Team not found.");
         }

@@ -6,11 +6,17 @@
         <div class="navbar-logo">ITC</div>
         <span>Bot Dashboard</span>
     </a>
-    <div class="navbar-right">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-right navbar-links" id="navLinks">
         <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
+        <% if (locals.hasDevAccess) { %>
+        <a href="/dev" class="btn btn-outline btn-sm" style="font-size:0.78rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Dev</a>
+        <% } %>
         <div style="display:flex; align-items:center; gap:8px;">
             <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
-            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;" class="hide-mobile"><%= user.globalName || user.username %></span>
         </div>
         <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
     </div>
@@ -23,7 +29,6 @@
         <h1 class="page-title">Bot Configurations</h1>
         <div style="display:flex; gap:8px;">
             <% if (user.role === 'dev') { %>
-                <a href="/console" class="btn btn-outline">🖥️ Console</a>
                 <a href="/bots/add" class="btn btn-primary">+ Add Bot</a>
             <% } %>
         </div>
@@ -41,7 +46,7 @@
                      oncontextmenu="openCtxMenu(event, this)">
                     <div class="card-header">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="status-dot <%= bot.isActive ? 'status-active' : 'status-inactive' %>" data-team-dot="<%= bot.teamName %>"></span>
+                            <span class="status-dot <%= bot.isActive ? (bot.hasActiveWorkshop ? 'status-active status-glow' : 'status-active') : 'status-inactive' %>" data-team-dot="<%= bot.teamName %>"></span>
                             <span class="card-title"><%= bot.teamName %></span>
                         </div>
                         <div class="actions">
@@ -129,20 +134,7 @@
                             <%= bot.isActive ? 'Active' : 'Inactive' %>
                         </span>
                     </div>
-                    <% if (user.role !== 'leader') { %>
-                        <div style="margin-top: 12px; display:flex; gap:8px;">
-                            <form method="POST" action="/bots/<%= bot._id %>/toggle" style="display:inline;">
-                                <button type="submit" class="btn btn-sm <%= bot.isActive ? 'btn-outline' : 'btn-success' %>">
-                                    <%= bot.isActive ? 'Deactivate' : 'Activate' %>
-                                </button>
-                            </form>
-                            <form method="POST" action="/bots/<%= bot._id %>/delete" style="display:inline;"
-                                  onsubmit="return confirm('Delete <%= bot.teamName %>? This cannot be undone.')">
-                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                            </form>
-                        </div>
-                    <% } %>
-                </div>
+                    </div>
             <% }); %>
         </div>
     <% } %>
@@ -161,9 +153,9 @@
         window._snackbar.show(
             'Select which bot to ' + actionName + ':',
             [
-                { label: '🟢 Beginner Bot', value: 'beginner' },
-                { label: '🔵 Advanced Bot', value: 'advanced' },
-                { label: '⚡ Both Bots', value: 'all' }
+                { label: 'Beginner Bot', value: 'beginner' },
+                { label: 'Advanced Bot', value: 'advanced' },
+                { label: 'Both Bots', value: 'all' }
             ],
             function(val) { actionFn(botId, val); }
         );
@@ -216,11 +208,18 @@
             items.push({
                 icon: I.trash, label: 'Delete Bot', danger: true,
                 action: function() {
-                    if (confirm('Delete ' + teamName + '? This cannot be undone.')) {
-                        var del = document.createElement('form');
-                        del.method = 'POST'; del.action = '/bots/' + botId + '/delete';
-                        document.body.appendChild(del); del.submit();
-                    }
+                    window.showConfirm({
+                        title: 'Delete Bot',
+                        message: 'Delete ' + teamName + '? This action cannot be undone.',
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel',
+                        type: 'danger',
+                        onConfirm: function() {
+                            var del = document.createElement('form');
+                            del.method = 'POST'; del.action = '/bots/' + botId + '/delete';
+                            document.body.appendChild(del); del.submit();
+                        }
+                    });
                 }
             });
         }

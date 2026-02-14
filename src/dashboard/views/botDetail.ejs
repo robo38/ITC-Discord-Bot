@@ -6,11 +6,14 @@
         <div class="navbar-logo">ITC</div>
         <span>Bot Dashboard</span>
     </a>
-    <div class="navbar-right">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-right navbar-links" id="navLinks">
         <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
         <div style="display:flex; align-items:center; gap:8px;">
             <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
-            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;" class="hide-mobile"><%= user.globalName || user.username %></span>
         </div>
         <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
     </div>
@@ -38,7 +41,8 @@
     <!-- Status bar + controls -->
     <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div style="display:flex; align-items:center; gap:16px;">
-            <span class="status-dot <%= bot.isActive ? 'status-active' : 'status-inactive' %>" style="width:14px;height:14px;"></span>
+            <% var hasActiveWs = workshops.some(function(w) { return w.status === 'active'; }); %>
+            <span class="status-dot <%= bot.isActive ? (hasActiveWs ? 'status-active status-glow' : 'status-active') : 'status-inactive' %>" style="width:14px;height:14px;"></span>
             <div>
                 <strong style="font-size:1.1rem;"><%= bot.teamName %></strong>
                 <span style="color:var(--text-secondary); margin-left:12px;">
@@ -54,11 +58,6 @@
                 <button class="btn-icon" id="reconnectBtn" title="Reconnect to voice">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                 </button>
-                <% if (user.role === 'dev' || user.role === 'be') { %>
-                    <button class="btn-icon" id="editProfileBtn" title="Edit bot profile">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </button>
-                <% } %>
             <% } %>
             <button class="btn-icon" id="teamMembersBtn" title="Team Members" style="border-color: var(--accent); color: var(--accent);">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -75,34 +74,19 @@
         <% if (bot.leaders && bot.leaders.length > 0) { %>
             <div class="avatar-stack" style="gap: 0;">
                 <% bot.leaders.forEach(function(leader) { %>
-                    <div class="avatar-item tooltip-trigger" style="width:44px;height:44px;border:2px solid var(--accent);">
+                    <% var isOnline = (typeof onlineUserIds !== 'undefined' && onlineUserIds) ? onlineUserIds.indexOf(leader.id) !== -1 : false; %>
+                    <div class="avatar-item leader-avatar"
+                         data-leader-id="<%= leader.id %>"
+                         data-leader-name="<%= (leader.globalName || leader.username).replace(/"/g, '&quot;') %>"
+                         data-leader-username="<%= leader.username %>"
+                         data-leader-avatar="<%= leader.avatarUrl %>"
+                         data-leader-sessions="<%= leader.sessionCount || 0 %>"
+                         data-leader-team="<%= bot.teamName %>"
+                         data-leader-roles="<%= (leader.roles || []).join('|||') %>"
+                         data-leader-online="<%= isOnline %>"
+                         style="width:44px;height:44px;border:2px solid var(--accent); position:relative; cursor:pointer;">
                         <img src="<%= leader.avatarUrl %>" alt="<%= leader.username %>" />
-                        <div class="tooltip-card">
-                            <div class="tt-name"><%= leader.globalName || leader.username %></div>
-                            <div class="tt-sub">@<%= leader.username %></div>
-                            <div class="tt-row">
-                                <span class="tt-label">ID</span>
-                                <span class="tt-value copy-text" data-copy="<%= leader.id %>" style="font-family:monospace;font-size:0.75rem;cursor:pointer;"><%= leader.id %></span>
-                            </div>
-                            <div class="tt-row">
-                                <span class="tt-label">Team</span>
-                                <span class="tt-value"><%= bot.teamName %></span>
-                            </div>
-                            <div class="tt-row">
-                                <span class="tt-label">Sessions</span>
-                                <span class="tt-value"><%= leader.sessionCount || 0 %></span>
-                            </div>
-                            <% if (leader.roles && leader.roles.length > 0) { %>
-                                <div class="tt-roles">
-                                    <% leader.roles.slice(0, 8).forEach(function(role) { %>
-                                        <span class="tt-role-tag"><%= role %></span>
-                                    <% }); %>
-                                    <% if (leader.roles.length > 8) { %>
-                                        <span class="tt-role-tag">+<%= leader.roles.length - 8 %></span>
-                                    <% } %>
-                                </div>
-                            <% } %>
-                        </div>
+                        <span class="leader-online-dot" style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg-card);display:<%= isOnline ? 'block' : 'none' %>;background:var(--success);animation:pulse-glow 1.5s ease-in-out infinite;"></span>
                     </div>
                 <% }); %>
             </div>
@@ -182,7 +166,7 @@
             <h3 style="margin-bottom:14px; color:var(--accent); font-size:1rem;">Split Configuration</h3>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
                 <div>
-                    <h4 style="color:var(--success); margin-bottom:10px;">🟢 Bot 1 (Beginner)</h4>
+                    <h4 style="color:var(--success); margin-bottom:10px;"><span class="dot-icon dot-green"></span> Bot 1 (Beginner)</h4>
                     <div class="info-row">
                         <span class="info-label">Token</span>
                         <% if (user.role === 'dev') { %>
@@ -192,7 +176,7 @@
                         <% } else if (user.role === 'be') { %>
                             <span class="info-value token-masked" style="font-family:monospace; font-size:0.8rem;">
                                 **********
-                                <button class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 1 Token" style="margin-left:8px; font-size:0.7rem; padding:2px 10px;">🔑 Request Access</button>
+                                <button class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 1 Token" style="margin-left:8px; font-size:0.7rem; padding:2px 10px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Request Access</button>
                             </span>
                         <% } else { %>
                             <span class="info-value" style="font-family:monospace; font-size:0.8rem;">**********</span>
@@ -204,7 +188,7 @@
                     </div>
                 </div>
                 <div>
-                    <h4 style="color:var(--accent); margin-bottom:10px;">🔵 Bot 2 (Advanced)</h4>
+                    <h4 style="color:var(--accent); margin-bottom:10px;"><span class="dot-icon dot-blue"></span> Bot 2 (Advanced)</h4>
                     <div class="info-row">
                         <span class="info-label">Token</span>
                         <% if (user.role === 'dev') { %>
@@ -214,7 +198,7 @@
                         <% } else if (user.role === 'be') { %>
                             <span class="info-value token-masked" style="font-family:monospace; font-size:0.8rem;">
                                 **********
-                                <button class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 2 Token" style="margin-left:8px; font-size:0.7rem; padding:2px 10px;">🔑 Request Access</button>
+                                <button class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 2 Token" style="margin-left:8px; font-size:0.7rem; padding:2px 10px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Request Access</button>
                             </span>
                         <% } else { %>
                             <span class="info-value" style="font-family:monospace; font-size:0.8rem;">**********</span>
@@ -238,7 +222,7 @@
     <!-- Workshop Control (button → opens modal) -->
     <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-            <h3 style="color:var(--accent); font-size:1rem; margin:0;">🎯 Workshop Control</h3>
+            <h3 style="color:var(--accent); font-size:1rem; margin:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Workshop Control</h3>
             <div id="wsControlStatus" style="font-size:0.88rem; color:var(--text-secondary);"></div>
             <div style="display:flex; gap:8px;">
                 <button class="btn btn-success btn-sm" id="wsOpenModalBtn">
@@ -253,9 +237,9 @@
         </div>
     </div>
 
-    <!-- Workshops table -->
+    <!-- Workshops & Sessions -->
     <div class="card">
-        <h3 style="margin-bottom:14px; color:var(--accent); font-size:1rem;">Workshops</h3>
+        <h3 style="margin-bottom:14px; color:var(--accent); font-size:1rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>Workshops & Sessions</h3>
         <% if (workshops.length === 0) { %>
             <p style="color:var(--text-secondary); text-align:center; padding:20px;">No workshops recorded yet.</p>
         <% } else { %>
@@ -273,7 +257,11 @@
                 </thead>
                 <tbody>
                     <% workshops.forEach(function(ws) { %>
-                        <tr data-ctx="workshop" data-wsid="<%= ws.workshopId %>" data-wsstatus="<%= ws.status %>">
+                        <%
+                            var hasSession = sessions.some(function(s) { return s.workshopId === ws.workshopId; });
+                            var matchedSession = sessions.find(function(s) { return s.workshopId === ws.workshopId; });
+                        %>
+                        <tr data-ctx="workshop" data-wsid="<%= ws.workshopId %>" data-wsstatus="<%= ws.status %>" data-has-session="<%= hasSession %>">
                             <td>
                                 <span class="copy-text" data-copy="<%= ws.workshopId %>" title="Click to copy full ID"
                                       style="font-family:monospace; font-size:0.8rem;">
@@ -287,11 +275,16 @@
                                 </span>
                             </td>
                             <td><%= new Date(ws.startTime).toLocaleDateString() %> <%= new Date(ws.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
-                            <td><%= ws.averageDuration %> min</td>
-                            <td><%= ws.participantCount %></td>
+                            <td><%= matchedSession ? Math.round(matchedSession.totalDuration / 60000) + ' min' : ws.averageDuration + ' min' %></td>
+                            <td><%= matchedSession ? matchedSession.totalParticipants : ws.participantCount %></td>
                             <td style="text-align:right;">
                                 <div class="actions" style="justify-content:flex-end;">
-                                    <button class="btn-icon btn-icon-sm view-data-btn" data-wsid="<%= ws.workshopId %>" data-source="workshop" title="View Participants">
+                                    <% if (hasSession) { %>
+                                        <button class="btn-icon btn-icon-sm session-detail-btn" data-wsid="<%= ws.workshopId %>" title="Session Details">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                        </button>
+                                    <% } %>
+                                    <button class="btn-icon btn-icon-sm view-data-btn" data-wsid="<%= ws.workshopId %>" data-source="<%= hasSession ? 'session' : 'workshop' %>" title="View Participants">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                     </button>
                                     <a href="/bots/<%= bot._id %>/export/<%= ws.workshopId %>" class="btn-icon btn-icon-sm" title="Export XLSX">
@@ -305,61 +298,38 @@
             </table>
         <% } %>
     </div>
+</div>
 
-    <!-- Recent Sessions -->
-    <div class="card">
-        <h3 style="margin-bottom:14px; color:var(--accent); font-size:1rem;">Recent Sessions</h3>
-        <% if (sessions.length === 0) { %>
-            <p style="color:var(--text-secondary); text-align:center; padding:20px;">No sessions recorded yet.</p>
-        <% } else { %>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Type</th>
-                        <th>Participants</th>
-                        <th>Duration</th>
-                        <th>Date</th>
-                        <th style="text-align:right;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% sessions.forEach(function(s) { %>
-                        <%
-                            // Check if session has a still-active workshop
-                            var isActiveSession = workshops.some(function(w) {
-                                return w.workshopId === s.workshopId && w.status === 'active';
-                            });
-                        %>
-                        <tr data-ctx="session" data-wsid="<%= s.workshopId %>" data-session-active="<%= isActiveSession %>">
-                            <td>
-                                <span class="copy-text" data-copy="<%= s.workshopId %>" title="Click to copy full ID"
-                                      style="font-family:monospace; font-size:0.8rem;">
-                                    <%= s.workshopId.substring(0, 12) %>...
-                                </span>
-                            </td>
-                            <td><%= s.type %></td>
-                            <td><%= s.totalParticipants %></td>
-                            <td><%= Math.round(s.totalDuration / 60000) %> min</td>
-                            <td><%= new Date(s.startTime).toLocaleDateString() %></td>
-                            <td style="text-align:right;">
-                                <div class="actions" style="justify-content:flex-end;">
-                                    <button class="btn-icon btn-icon-sm session-detail-btn" data-wsid="<%= s.workshopId %>" title="Session Details">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                                    </button>
-                                    <button class="btn-icon btn-icon-sm view-data-btn" data-wsid="<%= s.workshopId %>" data-source="session" title="View Participants">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    </button>
-                                    <a href="/bots/<%= bot._id %>/export-session/<%= s.workshopId %>" class="btn-icon btn-icon-sm" title="Export XLSX">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        <% } %>
+<!-- ─── Leader Detail Popup ──────────────────────────────────────────── -->
+<div class="modal-overlay" id="leaderDetailModal">
+    <div class="modal-content" style="max-width:380px;">
+        <div class="modal-header">
+            <h3 id="ldTitle">Leader Details</h3>
+            <button class="modal-close" id="ldCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="modal-body" style="text-align:center;">
+            <div style="position:relative; display:inline-block; margin-bottom:14px;">
+                <img id="ldAvatar" src="" alt="" style="width:80px; height:80px; border-radius:50%; border:3px solid var(--accent);" />
+                <span id="ldOnlineDot" style="position:absolute;bottom:2px;right:2px;width:16px;height:16px;border-radius:50%;border:3px solid var(--bg-card);background:var(--success);display:none;"></span>
+            </div>
+            <div id="ldName" style="font-weight:700; font-size:1.1rem; color:var(--text-primary);"></div>
+            <div id="ldUsername" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:14px;"></div>
+            <div style="text-align:left;">
+                <div class="info-row">
+                    <span class="info-label">ID</span>
+                    <span class="info-value copy-text" id="ldId" data-copy="" style="font-family:monospace; font-size:0.8rem; cursor:pointer;"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Team</span>
+                    <span class="info-value" id="ldTeam"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Sessions</span>
+                    <span class="info-value" id="ldSessions"></span>
+                </div>
+            </div>
+            <div id="ldRoles" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:12px; justify-content:center;"></div>
+        </div>
     </div>
 </div>
 
@@ -367,8 +337,8 @@
 <div class="modal-overlay" id="wsModal">
     <div class="modal-content" style="max-width:520px;">
         <div class="modal-header">
-            <h3>🎯 Start Workshop — <%= bot.teamName %></h3>
-            <button class="modal-close" id="wsModalClose">✕</button>
+            <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Start Workshop — <%= bot.teamName %></h3>
+            <button class="modal-close" id="wsModalClose"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
             <div id="wsModalAlert" style="display:none; margin-bottom:12px; padding:10px 14px; border-radius:10px; font-size:0.85rem;"></div>
@@ -398,10 +368,21 @@
             </div>
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px;">
                 <button class="btn btn-outline btn-sm" id="wsModalCancel">Cancel</button>
-                <button class="btn btn-success" id="wsStartBtn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Start Workshop
-                </button>
+                <% if (bot.isSplit) { %>
+                    <button class="btn btn-success" id="wsStartBeginner" data-sub="0">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Start Beginner
+                    </button>
+                    <button class="btn btn-primary" id="wsStartAdvanced" data-sub="1">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Start Advanced
+                    </button>
+                <% } else { %>
+                    <button class="btn btn-success" id="wsStartBtn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Start Workshop
+                    </button>
+                <% } %>
             </div>
         </div>
     </div>
@@ -412,7 +393,7 @@
     <div class="modal-content" style="max-width:600px;">
         <div class="modal-header">
             <h3>Session Details</h3>
-            <button class="modal-close" id="sdCloseBtn">✕</button>
+            <button class="modal-close" id="sdCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
             <div id="sdLoading" style="text-align:center; padding:30px; color:var(--text-secondary);">Loading session details...</div>
@@ -453,7 +434,7 @@
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
                     <button class="btn btn-outline btn-sm" id="sdViewParticipants">View Participants</button>
-                    <button class="btn btn-danger btn-sm" id="sdStopSession" style="display:none;">⏹ Stop Session</button>
+                    <button class="btn btn-danger btn-sm" id="sdStopSession" style="display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:3px;"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Stop Session</button>
                 </div>
             </div>
         </div>
@@ -464,14 +445,17 @@
 <div class="modal-overlay" id="leaderboardModal">
     <div class="modal-content" style="max-width:700px;">
         <div class="modal-header">
-            <h3>🏆 Team Leaderboard — <%= bot.teamName %></h3>
-            <button class="modal-close" id="lbCloseBtn">✕</button>
+            <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7.4 4 9 7 12 7s4.6-3 7.5-3a2.5 2.5 0 0 1 0 5H18"/><path d="M18 15h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 15H4.5a2.5 2.5 0 0 1 0 5H6"/><path d="m2 21 6-6"/><path d="m22 3-6 6"/><path d="M12 12v.01"/><path d="M12 7v5"/></svg>Team Leaderboard — <%= bot.teamName %></h3>
+            <button class="modal-close" id="lbCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
             <div class="lb-tabs">
                 <button class="lb-tab active" data-period="all">All Time</button>
                 <button class="lb-tab" data-period="month">This Month</button>
                 <button class="lb-tab" data-period="week">This Week</button>
+            </div>
+            <div class="toolbar" style="margin-top:10px;">
+                <input type="text" id="lbSearch" placeholder="Search by username or ID..." />
             </div>
             <div id="lbLoading" style="text-align:center; padding:30px; color:var(--text-secondary);">Loading leaderboard...</div>
             <div id="lbContent" style="display:none;">
@@ -501,11 +485,11 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Team Members — <%= bot.teamName %></h3>
-            <button class="modal-close" id="tmCloseBtn">✕</button>
+            <button class="modal-close" id="tmCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
             <div class="toolbar">
-                <input type="text" id="tmSearch" placeholder="🔍 Search by username..." />
+                <input type="text" id="tmSearch" placeholder="Search by username or ID..." />
             </div>
             <div id="tmLoading" style="text-align:center; padding:30px; color:var(--text-secondary);">Loading members...</div>
             <div id="tmTable" style="display:none; overflow-x:auto;">
@@ -535,19 +519,19 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Participants — <span id="modalWsId" style="font-family:monospace; font-size:0.85rem;"></span></h3>
-            <button class="modal-close" id="modalCloseBtn">✕</button>
+            <button class="modal-close" id="modalCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
             <div class="toolbar">
-                <input type="text" id="pSearch" placeholder="🔍 Search by username or ID..." />
+                <input type="text" id="pSearch" placeholder="Search by username or ID..." />
                 <select id="pFilterStayed">
                     <option value="">All (Stayed)</option>
-                    <option value="yes">Stayed ✅</option>
-                    <option value="no">Left early ❌</option>
+                    <option value="yes">Stayed</option>
+                    <option value="no">Left early</option>
                 </select>
                 <select id="pFilterMic">
                     <option value="">All (Mic)</option>
-                    <option value="used">Used mic 🎤</option>
+                    <option value="used">Used mic</option>
                     <option value="muted">Never unmuted</option>
                 </select>
                 <select id="pFilterMsg">
@@ -580,42 +564,20 @@
     </div>
 </div>
 
-<!-- ─── Profile Edit Modal ──────────────────────────────────────────── -->
-<div class="modal-overlay" id="profileModal">
-    <div class="modal-content" style="max-width:480px;">
-        <div class="modal-header">
-            <h3>Edit Bot Profile</h3>
-            <button class="modal-close" id="profileCloseBtn">✕</button>
-        </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>Bot Username</label>
-                <input type="text" id="profileName" placeholder="New bot username..." />
-                <div class="form-hint">Discord limits username changes. Use carefully.</div>
-            </div>
-            <div class="form-group">
-                <label>Avatar URL</label>
-                <input type="text" id="profileAvatar" placeholder="https://example.com/avatar.png" />
-                <div class="form-hint">Direct link to an image (PNG/JPG).</div>
-            </div>
-            <div id="profileStatus" style="margin-top:10px; font-size:0.85rem;"></div>
-            <button class="btn btn-primary" id="profileSaveBtn" style="margin-top:14px;">Save Changes</button>
-        </div>
-    </div>
-</div>
-
 <!-- ─── Video Tutorial Modal ─────────────────────────────────────────── -->
 <div class="modal-overlay" id="videoModal">
     <div class="modal-content video-modal-content">
         <div class="modal-header">
-            <h3>📹 Tutorial</h3>
-            <button class="modal-close" id="videoCloseBtn">✕</button>
+            <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Tutorial</h3>
+            <button class="modal-close" id="videoCloseBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
-            <video id="tutorialVideo" controls preload="metadata">
-                <source src="/public/assets/video.mp4" type="video/mp4" />
-                Your browser does not support the video tag.
-            </video>
+            <div class="video-wrap">
+                <video id="tutorialVideo" controls preload="metadata">
+                    <source src="/public/assets/video.mp4" type="video/mp4" />
+                    Your browser does not support the video tag.
+                </video>
+            </div>
         </div>
     </div>
 </div>
@@ -641,6 +603,50 @@
     function showToast(msg) { window._toast(msg); }
 
     // (click-to-copy is handled globally by footer.ejs)
+
+    // ─── Leader Detail Popup ──────────────────────────────────────
+    (function() {
+        var ldModal = document.getElementById('leaderDetailModal');
+        document.getElementById('ldCloseBtn').addEventListener('click', function() { ldModal.classList.remove('active'); });
+        ldModal.addEventListener('click', function(e) { if (e.target === ldModal) ldModal.classList.remove('active'); });
+
+        document.querySelectorAll('.leader-avatar').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                // Ignore if right-click
+                if (e.button && e.button === 2) return;
+                var d = el.dataset;
+                document.getElementById('ldAvatar').src = d.leaderAvatar;
+                document.getElementById('ldName').textContent = d.leaderName;
+                document.getElementById('ldUsername').textContent = '@' + d.leaderUsername;
+                document.getElementById('ldId').textContent = d.leaderId;
+                document.getElementById('ldId').dataset.copy = d.leaderId;
+                document.getElementById('ldTeam').textContent = d.leaderTeam;
+                document.getElementById('ldSessions').textContent = d.leaderSessions;
+                var dot = document.getElementById('ldOnlineDot');
+                dot.style.display = d.leaderOnline === 'true' ? 'block' : 'none';
+
+                // Roles
+                var rolesDiv = document.getElementById('ldRoles');
+                rolesDiv.innerHTML = '';
+                if (d.leaderRoles) {
+                    var roles = d.leaderRoles.split('|||').filter(Boolean);
+                    roles.slice(0, 12).forEach(function(r) {
+                        var tag = document.createElement('span');
+                        tag.className = 'tt-role-tag';
+                        tag.textContent = r;
+                        rolesDiv.appendChild(tag);
+                    });
+                    if (roles.length > 12) {
+                        var more = document.createElement('span');
+                        more.className = 'tt-role-tag';
+                        more.textContent = '+' + (roles.length - 12);
+                        rolesDiv.appendChild(more);
+                    }
+                }
+                ldModal.classList.add('active');
+            });
+        });
+    })();
 
     // ─── Format helpers ───────────────────────────────────────────
     function formatMs(ms) {
@@ -735,6 +741,9 @@
         tbody.innerHTML = '';
         pageData.forEach(function(p) {
             var tr = document.createElement('tr');
+            tr.dataset.ctx = 'user-row';
+            tr.dataset.discordId = p.discordId;
+            tr.dataset.username = p.username;
             tr.innerHTML =
                 '<td><span class="copy-text" data-copy="' + esc(p.discordId) + '" title="Click to copy Discord ID: ' + esc(p.discordId) + '" style="font-weight:600;cursor:pointer;">' + esc(p.username) + '</span></td>' +
                 '<td>' + esc(p.teamLabel) + '</td><td>' + formatMs(p.totalVoiceMs) + '</td><td>' + formatMs(p.totalMicMs) + '</td>' +
@@ -784,9 +793,9 @@
         window._snackbar.show(
             'Select which bot to ' + actionLabel + ':',
             [
-                { label: '🟢 Beginner Bot', value: 'beginner' },
-                { label: '🔵 Advanced Bot', value: 'advanced' },
-                { label: '⚡ Both Bots', value: 'all' }
+                { label: 'Beginner Bot', value: 'beginner' },
+                { label: 'Advanced Bot', value: 'advanced' },
+                { label: 'Both Bots', value: 'all' }
             ],
             function(val) {
                 fetch('/api/bots/' + BOT_ID + '/' + action + '?subBot=' + val, { method: 'POST' })
@@ -814,37 +823,18 @@
         });
     }
 
-    // ─── Profile edit modal ───────────────────────────────────────
-    var profileModal = setupModal('profileModal', 'profileCloseBtn');
-    var editProfileBtn = document.getElementById('editProfileBtn');
-    if (editProfileBtn) editProfileBtn.addEventListener('click', function() { profileModal.classList.add('active'); });
-
-    document.getElementById('profileSaveBtn').addEventListener('click', function() {
-        var name = document.getElementById('profileName').value.trim();
-        var avatar = document.getElementById('profileAvatar').value.trim();
-        var statusEl = document.getElementById('profileStatus');
-        if (!name && !avatar) { statusEl.textContent = 'Enter a username or avatar URL.'; statusEl.style.color = 'var(--warning)'; return; }
-        statusEl.textContent = 'Saving...'; statusEl.style.color = 'var(--text-secondary)';
-        fetch('/api/bots/' + BOT_ID + '/profile', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: name, avatarUrl: avatar })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            statusEl.textContent = d.message; statusEl.style.color = d.success ? 'var(--success)' : 'var(--danger)';
-        }).catch(function() { statusEl.textContent = 'Request failed'; statusEl.style.color = 'var(--danger)'; });
-    });
-
     // ─── Workshop Modal (start) ───────────────────────────────────
     var wsModal = setupModal('wsModal', 'wsModalClose');
     var wsStatusEl = document.getElementById('wsControlStatus');
     var wsOpenBtn = document.getElementById('wsOpenModalBtn');
-    var wsStartBtn = document.getElementById('wsStartBtn');
     var wsStopBtn = document.getElementById('wsStopBtn');
+    var BOT_IS_SPLIT = <%= bot.isSplit ? 'true' : 'false' %>;
     document.getElementById('wsModalCancel').addEventListener('click', function() { wsModal.classList.remove('active'); });
 
     <% var activeWs = workshops.find(function(w) { return w.status === 'active'; }); %>
     <% var scheduledWs = workshops.find(function(w) { return w.status === 'scheduled'; }); %>
     <% if (activeWs) { %>
-        wsStatusEl.innerHTML = '🟢 Active workshop: <strong><%= activeWs.workshopId.substring(0, 16) %>...</strong>';
+        wsStatusEl.innerHTML = '<span class="dot-icon dot-green"></span> Active workshop: <strong><%= activeWs.workshopId.substring(0, 16) %>...</strong>';
         wsOpenBtn.style.display = 'none';
         wsStopBtn.style.display = '';
         wsStopBtn.dataset.wsid = '<%= activeWs.workshopId %>';
@@ -859,7 +849,7 @@
                 var now = Date.now();
                 var diff = startTime - now;
                 if (diff <= 0) {
-                    wsStatusEl.innerHTML = '🟢 Workshop starting now...';
+                    wsStatusEl.innerHTML = '<span class="dot-icon dot-green"></span> Workshop starting now...';
                     clearInterval(countdownTimer);
                     setTimeout(function() { location.reload(); }, 5000);
                     return;
@@ -868,7 +858,7 @@
                 var m = Math.floor((diff % 3600000) / 60000);
                 var s = Math.floor((diff % 60000) / 1000);
                 var timeStr = h > 0 ? h + 'h ' + m + 'm ' + s + 's' : m + 'm ' + s + 's';
-                wsStatusEl.innerHTML = '<span class="ws-scheduled-badge">📅 Scheduled — starts in <span class="countdown">' + timeStr + '</span></span>';
+                wsStatusEl.innerHTML = '<span class="ws-scheduled-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Scheduled — starts in <span class="countdown">' + timeStr + '</span></span>';
             }
             updateCountdown();
             var countdownTimer = setInterval(updateCountdown, 1000);
@@ -883,14 +873,18 @@
         wsModal.classList.add('active');
     });
 
-    wsStartBtn.addEventListener('click', function() {
-        wsStartBtn.disabled = true;
-        wsStartBtn.textContent = 'Starting...';
+    // ─── Workshop start handler (supports split & single mode) ──
+    function doStartWorkshop(subBot) {
         var type = document.getElementById('wsType').value;
         var duration = document.getElementById('wsDuration').value;
         var startTimeInput = document.getElementById('wsStartTime').value;
         var body = { type: type, duration: duration };
         if (startTimeInput) body.startTime = startTimeInput;
+        if (subBot !== undefined) body.subBot = subBot;
+
+        // Disable all start buttons
+        var btns = document.querySelectorAll('#wsStartBtn, #wsStartBeginner, #wsStartAdvanced');
+        btns.forEach(function(b) { b.disabled = true; b.style.opacity = '0.6'; });
 
         fetch('/api/bots/' + BOT_ID + '/workshop/start', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -898,7 +892,7 @@
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
                 wsModal.classList.remove('active');
-                wsStatusEl.innerHTML = '🟢 Workshop started!';
+                wsStatusEl.innerHTML = '<span class="dot-icon dot-green"></span> Workshop started!';
                 wsOpenBtn.style.display = 'none';
                 wsStopBtn.style.display = '';
                 wsStopBtn.dataset.wsid = d.workshopId;
@@ -910,31 +904,44 @@
                 alertEl.style.background = 'rgba(255,107,107,0.1)';
                 alertEl.style.color = 'var(--danger)';
                 alertEl.style.border = '1px solid var(--danger)';
-                wsStartBtn.disabled = false;
-                wsStartBtn.textContent = 'Start Workshop';
+                btns.forEach(function(b) { b.disabled = false; b.style.opacity = ''; });
             }
         }).catch(function() {
-            wsStartBtn.disabled = false;
-            wsStartBtn.textContent = 'Start Workshop';
+            btns.forEach(function(b) { b.disabled = false; b.style.opacity = ''; });
         });
-    });
+    }
+
+    if (BOT_IS_SPLIT) {
+        document.getElementById('wsStartBeginner').addEventListener('click', function() { doStartWorkshop(0); });
+        document.getElementById('wsStartAdvanced').addEventListener('click', function() { doStartWorkshop(1); });
+    } else {
+        document.getElementById('wsStartBtn').addEventListener('click', function() { doStartWorkshop(); });
+    }
 
     wsStopBtn.addEventListener('click', function() {
-        if (!confirm('Stop the active workshop?')) return;
-        wsStopBtn.disabled = true; wsStopBtn.textContent = 'Stopping...';
-        fetch('/api/bots/' + BOT_ID + '/workshop/stop', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workshopId: wsStopBtn.dataset.wsid })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.success) {
-                wsStatusEl.innerHTML = '⏹️ Workshop stopped.';
-                wsStopBtn.style.display = 'none'; wsOpenBtn.style.display = '';
-                setTimeout(function() { location.reload(); }, 1500);
-            } else {
-                wsStatusEl.innerHTML = '⚠️ ' + (d.message || 'Failed');
-                wsStopBtn.disabled = false; wsStopBtn.textContent = 'Stop Workshop';
+        window.showConfirm({
+            title: 'Stop Workshop',
+            message: 'Stop the currently active workshop? Participants will be logged.',
+            confirmText: 'Stop',
+            cancelText: 'Cancel',
+            type: 'danger',
+            onConfirm: function() {
+                wsStopBtn.disabled = true; wsStopBtn.textContent = 'Stopping...';
+                fetch('/api/bots/' + BOT_ID + '/workshop/stop', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workshopId: wsStopBtn.dataset.wsid })
+                }).then(function(r) { return r.json(); }).then(function(d) {
+                    if (d.success) {
+                        wsStatusEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:3px;"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Workshop stopped.';
+                        wsStopBtn.style.display = 'none'; wsOpenBtn.style.display = '';
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        wsStatusEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;color:var(--warning);"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ' + (d.message || 'Failed');
+                        wsStopBtn.disabled = false; wsStopBtn.textContent = 'Stop Workshop';
+                    }
+                }).catch(function() { wsStopBtn.disabled = false; wsStopBtn.textContent = 'Stop Workshop'; });
             }
-        }).catch(function() { wsStopBtn.disabled = false; wsStopBtn.textContent = 'Stop Workshop'; });
+        });
     });
 
     // ─── Session Detail Modal ─────────────────────────────────────
@@ -985,28 +992,39 @@
 
     document.getElementById('sdStopSession').addEventListener('click', function() {
         var stopBtn = document.getElementById('sdStopSession');
-        if (!confirm('Stop this active session?')) return;
-        stopBtn.disabled = true; stopBtn.textContent = 'Stopping...';
-        fetch('/api/sessions/' + encodeURIComponent(stopBtn.dataset.wsid) + '/stop', { method: 'POST' })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.success) {
-                    showToast('Session stopped');
-                    sdModal.classList.remove('active');
-                    setTimeout(function() { location.reload(); }, 1500);
-                } else {
-                    stopBtn.textContent = d.message || 'Failed';
-                    stopBtn.disabled = false;
-                }
-            }).catch(function() { stopBtn.textContent = 'Failed'; stopBtn.disabled = false; });
+        window.showConfirm({
+            title: 'Stop Session',
+            message: 'Stop this active session? Data will be saved.',
+            confirmText: 'Stop',
+            cancelText: 'Cancel',
+            type: 'danger',
+            onConfirm: function() {
+                stopBtn.disabled = true; stopBtn.textContent = 'Stopping...';
+                fetch('/api/sessions/' + encodeURIComponent(stopBtn.dataset.wsid) + '/stop', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.success) {
+                            showToast('Session stopped');
+                            sdModal.classList.remove('active');
+                            setTimeout(function() { location.reload(); }, 1500);
+                        } else {
+                            stopBtn.textContent = d.message || 'Failed';
+                            stopBtn.disabled = false;
+                        }
+                    }).catch(function() { stopBtn.textContent = 'Failed'; stopBtn.disabled = false; });
+            }
+        });
     });
 
     // ─── Leaderboard Modal ────────────────────────────────────────
     var lbModal = setupModal('leaderboardModal', 'lbCloseBtn');
     var lbPeriod = 'all';
+    var lbAllData = [];
+    var lbTotalSessions = 0;
 
     document.getElementById('leaderboardBtn').addEventListener('click', function() {
         lbModal.classList.add('active');
+        document.getElementById('lbSearch').value = '';
         loadLeaderboard('all');
     });
 
@@ -1014,9 +1032,12 @@
         tab.addEventListener('click', function() {
             document.querySelectorAll('.lb-tab').forEach(function(t) { t.classList.remove('active'); });
             tab.classList.add('active');
+            document.getElementById('lbSearch').value = '';
             loadLeaderboard(tab.dataset.period);
         });
     });
+
+    document.getElementById('lbSearch').addEventListener('input', function() { lbRender(); });
 
     function loadLeaderboard(period) {
         lbPeriod = period;
@@ -1028,33 +1049,55 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 document.getElementById('lbLoading').style.display = 'none';
-                if (!data.leaderboard || data.leaderboard.length === 0) {
-                    document.getElementById('lbEmpty').style.display = '';
-                    return;
-                }
-                document.getElementById('lbContent').style.display = '';
-                document.getElementById('lbSummary').textContent = 'Total sessions: ' + data.totalSessions + ' — ' + data.leaderboard.length + ' participants';
-                var tbody = document.getElementById('lbTbody');
-                tbody.innerHTML = '';
-                data.leaderboard.forEach(function(m, i) {
-                    var rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-                    var tr = document.createElement('tr');
-                    tr.innerHTML =
-                        '<td><span class="lb-rank ' + rankClass + '">' + (i + 1) + '</span></td>' +
-                        '<td><div style="display:flex;align-items:center;gap:8px;">' +
-                            (m.avatarUrl ? '<img src="' + esc(m.avatarUrl) + '" style="width:28px;height:28px;border-radius:50%;" />' : '') +
-                            '<div><div style="font-weight:600;font-size:0.88rem;">' + esc(m.globalName || m.username) + '</div>' +
-                            '<div style="font-size:0.75rem;color:var(--text-secondary);">@' + esc(m.username) + '</div></div></div></td>' +
-                        '<td style="font-weight:600;">' + m.sessions + '</td>' +
-                        '<td>' + formatMs(m.totalVoiceMs) + '</td>' +
-                        '<td>' + formatMs(m.totalMicMs) + '</td>' +
-                        '<td>' + m.totalMsgs + '</td>' +
-                        '<td style="color:var(--success);">' + m.stayedCount + '</td>';
-                    tbody.appendChild(tr);
-                });
+                lbAllData = data.leaderboard || [];
+                lbTotalSessions = data.totalSessions || 0;
+                lbRender();
             }).catch(function() {
                 document.getElementById('lbLoading').textContent = 'Failed to load leaderboard.';
             });
+    }
+
+    function lbRender() {
+        var q = document.getElementById('lbSearch').value.toLowerCase().trim();
+        var filtered = lbAllData;
+        if (q) {
+            filtered = lbAllData.filter(function(m) {
+                return m.username.toLowerCase().indexOf(q) !== -1 ||
+                    (m.globalName || '').toLowerCase().indexOf(q) !== -1 ||
+                    m.discordId.indexOf(q) !== -1;
+            });
+        }
+        if (filtered.length === 0) {
+            document.getElementById('lbContent').style.display = 'none';
+            document.getElementById('lbEmpty').style.display = '';
+            document.getElementById('lbEmpty').textContent = q ? 'No results for "' + q + '"' : 'No data for this period.';
+            return;
+        }
+        document.getElementById('lbContent').style.display = '';
+        document.getElementById('lbEmpty').style.display = 'none';
+        document.getElementById('lbSummary').textContent = 'Total sessions: ' + lbTotalSessions + ' — ' + (q ? filtered.length + '/' : '') + lbAllData.length + ' participants';
+        var tbody = document.getElementById('lbTbody');
+        tbody.innerHTML = '';
+        filtered.forEach(function(m, i) {
+            var origIdx = lbAllData.indexOf(m);
+            var rankClass = origIdx === 0 ? 'gold' : origIdx === 1 ? 'silver' : origIdx === 2 ? 'bronze' : '';
+            var tr = document.createElement('tr');
+            tr.dataset.ctx = 'user-row';
+            tr.dataset.discordId = m.discordId;
+            tr.dataset.username = m.globalName || m.username;
+            tr.innerHTML =
+                '<td><span class="lb-rank ' + rankClass + '">' + (origIdx + 1) + '</span></td>' +
+                '<td><div style="display:flex;align-items:center;gap:8px;">' +
+                    (m.avatarUrl ? '<img src="' + esc(m.avatarUrl) + '" style="width:28px;height:28px;border-radius:50%;" />' : '') +
+                    '<div><div style="font-weight:600;font-size:0.88rem;">' + esc(m.globalName || m.username) + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--text-secondary);">@' + esc(m.username) + '</div></div></div></td>' +
+                '<td style="font-weight:600;">' + m.sessions + '</td>' +
+                '<td>' + formatMs(m.totalVoiceMs) + '</td>' +
+                '<td>' + formatMs(m.totalMicMs) + '</td>' +
+                '<td>' + m.totalMsgs + '</td>' +
+                '<td style="color:var(--success);">' + m.stayedCount + '</td>';
+            tbody.appendChild(tr);
+        });
     }
 
     // ─── Token access request buttons (BE role) ───────────────────
@@ -1066,9 +1109,9 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ botId: btn.dataset.bot, label: btn.dataset.label })
                 });
-                if (res.ok) { btn.textContent = '✓ Request Sent'; btn.style.color = 'var(--success)'; btn.style.borderColor = 'var(--success)'; }
-                else { btn.textContent = '✗ Failed'; btn.style.color = 'var(--danger)'; setTimeout(function() { btn.textContent = '🔑 Request Access'; btn.disabled = false; btn.style.color = ''; btn.style.borderColor = ''; }, 3000); }
-            } catch (e) { btn.textContent = '✗ Error'; setTimeout(function() { btn.textContent = '🔑 Request Access'; btn.disabled = false; }, 3000); }
+                if (res.ok) { btn.textContent = 'Request Sent'; btn.style.color = 'var(--success)'; btn.style.borderColor = 'var(--success)'; }
+                else { btn.textContent = 'Failed'; btn.style.color = 'var(--danger)'; setTimeout(function() { btn.textContent = 'Request Access'; btn.disabled = false; btn.style.color = ''; btn.style.borderColor = ''; }, 3000); }
+            } catch (e) { btn.textContent = 'Error'; setTimeout(function() { btn.textContent = 'Request Access'; btn.disabled = false; }, 3000); }
         });
     });
 
@@ -1097,7 +1140,7 @@
     function tmApplyFilter() {
         var q = document.getElementById('tmSearch').value.toLowerCase().trim();
         tmFiltered = tmAllMembers.filter(function(m) {
-            if (q && m.username.toLowerCase().indexOf(q) === -1 && (m.globalName || '').toLowerCase().indexOf(q) === -1) return false;
+            if (q && m.username.toLowerCase().indexOf(q) === -1 && (m.globalName || '').toLowerCase().indexOf(q) === -1 && m.discordId.indexOf(q) === -1) return false;
             return true;
         });
         tmRenderPage();
@@ -1117,6 +1160,9 @@
         tbody.innerHTML = '';
         pageData.forEach(function(m) {
             var tr = document.createElement('tr');
+            tr.dataset.ctx = 'user-row';
+            tr.dataset.discordId = m.discordId;
+            tr.dataset.username = m.globalName || m.username;
             tr.innerHTML =
                 '<td><div style="display:flex;align-items:center;gap:8px;">' +
                     '<img src="' + esc(m.avatarUrl) + '" style="width:28px;height:28px;border-radius:50%;" />' +
@@ -1141,34 +1187,70 @@
 
     // ─── Context menus for table rows and avatars ─────────────────
     document.addEventListener('contextmenu', function(e) {
+        // ─── User row context menu (leaderboard, members, participants) ──
+        var userRow = e.target.closest('tr[data-ctx="user-row"]');
+        if (userRow) {
+            e.preventDefault();
+            e.stopPropagation();
+            var uid = userRow.dataset.discordId;
+            var uname = userRow.dataset.username;
+            var I = window._ctxIcons;
+            window._ctxMenu.open(e, [
+                { icon: I.copy, label: 'Copy User ID', action: function() {
+                    navigator.clipboard.writeText(uid).then(function() { showToast('Copied: ' + uid); });
+                }},
+                { icon: I.user, label: 'Copy Username', action: function() {
+                    navigator.clipboard.writeText(uname).then(function() { showToast('Copied: ' + uname); });
+                }}
+            ], {});
+            return;
+        }
+
         // Workshop row context menu
         var wsRow = e.target.closest('tr[data-ctx="workshop"]');
         if (wsRow) {
             var wsid = wsRow.dataset.wsid;
             var status = wsRow.dataset.wsstatus;
+            var hasSession = wsRow.dataset.hasSession === 'true';
             var I = window._ctxIcons;
-            var items = [
-                { icon: I.view, label: 'View Participants', action: function() {
-                    var btn = wsRow.querySelector('.view-data-btn');
+            var items = [];
+            if (hasSession) {
+                items.push({ icon: I.info, label: 'Session Details', action: function() {
+                    var btn = wsRow.querySelector('.session-detail-btn');
                     if (btn) btn.click();
-                }},
-                { icon: I.download, label: 'Export XLSX', action: function() {
-                    window.location.href = '/bots/' + BOT_ID + '/export/' + wsid;
-                }},
-                { icon: I.copy, label: 'Copy Workshop ID', action: function() {
+                }});
+            }
+            items.push({ icon: I.view, label: 'View Participants', action: function() {
+                var btn = wsRow.querySelector('.view-data-btn');
+                if (btn) btn.click();
+            }});
+            items.push({ icon: I.download, label: 'Export XLSX', action: function() {
+                window.location.href = '/bots/' + BOT_ID + '/export/' + wsid;
+            }});
+            var copyChildren = [
+                { icon: I.copy, label: 'Copy ID', action: function() {
                     navigator.clipboard.writeText(wsid).then(function() { showToast('Copied: ' + wsid); });
                 }}
             ];
+            items.push(copyChildren[0]);
             if (status === 'active' || status === 'scheduled') {
                 items.push({ divider: true });
                 items.push({ icon: I.stop, label: 'Stop Workshop', danger: true, action: function() {
-                    if (!confirm('Stop this workshop?')) return;
-                    fetch('/api/bots/' + BOT_ID + '/workshop/stop', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ workshopId: wsid })
-                    }).then(function(r) { return r.json(); }).then(function(d) {
-                        showToast(d.message || 'Done');
-                        if (d.success) setTimeout(function() { location.reload(); }, 1500);
+                    window.showConfirm({
+                        title: 'Stop Workshop',
+                        message: 'Stop this workshop? Participants will be logged.',
+                        confirmText: 'Stop',
+                        cancelText: 'Cancel',
+                        type: 'danger',
+                        onConfirm: function() {
+                            fetch('/api/bots/' + BOT_ID + '/workshop/stop', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ workshopId: wsid })
+                            }).then(function(r) { return r.json(); }).then(function(d) {
+                                showToast(d.message || 'Done');
+                                if (d.success) setTimeout(function() { location.reload(); }, 1500);
+                            });
+                        }
                     });
                 }});
             }
@@ -1176,62 +1258,24 @@
             return;
         }
 
-        // Session row context menu
-        var sRow = e.target.closest('tr[data-ctx="session"]');
-        if (sRow) {
-            var sid = sRow.dataset.wsid;
-            var isActive = sRow.dataset.sessionActive === 'true';
-            var I = window._ctxIcons;
-            var items = [
-                { icon: I.info, label: 'Session Details', action: function() {
-                    var btn = sRow.querySelector('.session-detail-btn');
-                    if (btn) btn.click();
-                }},
-                { icon: I.view, label: 'View Participants', action: function() {
-                    var btn = sRow.querySelector('.view-data-btn');
-                    if (btn) btn.click();
-                }},
-                { icon: I.download, label: 'Export XLSX', action: function() {
-                    window.location.href = '/bots/' + BOT_ID + '/export-session/' + sid;
-                }},
-                { icon: I.copy, label: 'Copy Session ID', action: function() {
-                    navigator.clipboard.writeText(sid).then(function() { showToast('Copied: ' + sid); });
-                }}
-            ];
-            if (isActive) {
-                items.push({ divider: true });
-                items.push({ icon: I.stop, label: 'Stop Session', danger: true, action: function() {
-                    fetch('/api/sessions/' + encodeURIComponent(sid) + '/stop', { method: 'POST' })
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            showToast(d.message || 'Done');
-                            if (d.success) setTimeout(function() { location.reload(); }, 1500);
-                        });
-                }});
-            }
-            window._ctxMenu.open(e, items, { workshopId: sid });
-            return;
-        }
-
-        // Leader avatar context menu
-        var avatar = e.target.closest('.avatar-item.tooltip-trigger');
+        // Leader avatar context menu (right-click)
+        var avatar = e.target.closest('.avatar-item.leader-avatar');
         if (avatar) {
-            var tooltip = avatar.querySelector('.tooltip-card');
-            if (!tooltip) return;
-            var name = (tooltip.querySelector('.tt-name') || {}).textContent || '';
-            var username = (tooltip.querySelector('.tt-sub') || {}).textContent || '';
-            var idEl = tooltip.querySelector('.tt-value[style*="monospace"]');
-            var userId = idEl ? idEl.textContent.trim() : '';
+            e.preventDefault();
+            e.stopPropagation();
+            var userId = avatar.dataset.leaderId;
+            var name = avatar.dataset.leaderName;
+            var username = avatar.dataset.leaderUsername;
             var I = window._ctxIcons;
 
             window._ctxMenu.open(e, [
                 { icon: I.copy, label: 'Copy User ID', action: function() {
                     navigator.clipboard.writeText(userId).then(function() { showToast('Copied: ' + userId); });
                 }},
-                { icon: I.copy, label: 'Copy Username', action: function() {
-                    navigator.clipboard.writeText(username.replace('@', '')).then(function() { showToast('Copied: ' + username); });
+                { icon: I.user, label: 'Copy Username', action: function() {
+                    navigator.clipboard.writeText(username).then(function() { showToast('Copied: @' + username); });
                 }},
-                { icon: I.user, label: 'Copy Display Name', action: function() {
+                { icon: I.copy, label: 'Copy Display Name', action: function() {
                     navigator.clipboard.writeText(name).then(function() { showToast('Copied: ' + name); });
                 }}
             ], { userId: userId });
@@ -1264,7 +1308,7 @@
                 default: statusDot.classList.add('status-inactive');
             }
         }
-        var msgs = { connected: '🟢 Bot connected', disconnected: '🔴 Bot disconnected', reconnecting: '🟡 Reconnecting...', error: '❌ Bot error', deactivated: '⏹️ Deactivated', activated: '▶️ Activated' };
+        var msgs = { connected: 'Bot connected', disconnected: 'Bot disconnected', reconnecting: 'Reconnecting...', error: 'Bot error', deactivated: 'Deactivated', activated: 'Activated' };
         window._toast(msgs[data.status] || data.detail || data.status);
     });
 
@@ -1276,11 +1320,11 @@
                 setTimeout(function() { location.reload(); }, 2000);
                 break;
             case 'config:updated':
-                window._toast('🔄 Config updated — refreshing...');
+                window._toast('Config updated — refreshing...');
                 setTimeout(function() { location.reload(); }, 2000);
                 break;
             case 'profile:updated':
-                window._toast('✓ Profile updated');
+                window._toast('Profile updated');
                 break;
         }
     });
@@ -1288,33 +1332,43 @@
     // ─── New socket events ────────────────────────────────────────
     socket.on('session:started', function(data) {
         if (data.teamName !== TEAM_NAME) return;
-        window._toast('🟢 Session started');
+        window._toast('Session started');
     });
 
     socket.on('session:stopped', function(data) {
         if (data.teamName !== TEAM_NAME) return;
-        window._toast('⏹️ Session stopped — ' + (data.totalParticipants || 0) + ' participants');
+        window._toast('Session stopped — ' + (data.totalParticipants || 0) + ' participants');
         setTimeout(function() { location.reload(); }, 3000);
     });
 
     socket.on('participant:joined', function(data) {
         if (data.teamName !== TEAM_NAME) return;
-        window._toast('👤 ' + data.username + ' joined');
+        window._toast(data.username + ' joined');
     });
 
     socket.on('participant:left', function(data) {
         if (data.teamName !== TEAM_NAME) return;
-        window._toast('👤 ' + data.username + ' left');
+        window._toast(data.username + ' left');
     });
 
     socket.on('workshop:reminder', function(data) {
         if (data.teamName !== TEAM_NAME) return;
-        window._toast('⏰ Workshop reminder: ' + data.minutesUntilStart + 'min until ' + data.type);
+        window._toast('Workshop reminder: ' + data.minutesUntilStart + 'min until ' + data.type);
     });
 
     socket.on('leader:role-changed', function(data) {
         if (data.teamName !== TEAM_NAME) return;
         setTimeout(function() { location.reload(); }, 2000);
+    });
+
+    // ─── Leader online green dots (real-time) ─────────────────────
+    socket.on('global:user-online', function(data) {
+        var dot = document.querySelector('[data-leader-id="' + data.discordId + '"] .leader-online-dot');
+        if (dot) dot.style.display = 'block';
+    });
+    socket.on('global:user-offline', function(data) {
+        var dot = document.querySelector('[data-leader-id="' + data.discordId + '"] .leader-online-dot');
+        if (dot) dot.style.display = 'none';
     });
 })();
 </script>

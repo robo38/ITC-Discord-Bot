@@ -1,11 +1,11 @@
 import {
     ChatInputCommandInteraction,
+    AutocompleteInteraction,
     SlashCommandBuilder,
     Client,
     EmbedBuilder,
 } from "discord.js";
-import { Workshop } from "../../database";
-import teamsData from "../../data";
+import { Workshop, getAllTeamConfigs, getTeamConfigByName } from "../../database";
 
 export default {
     data: new SlashCommandBuilder()
@@ -16,20 +16,26 @@ export default {
                 .setName("team")
                 .setDescription("Select the team")
                 .setRequired(true)
-                .addChoices(
-                    ...teamsData.map((t) => ({
-                        name: t.TeamName,
-                        value: t.TeamName,
-                    }))
-                )
+                .setAutocomplete(true)
         ),
+
+    async autocomplete(interaction: AutocompleteInteraction) {
+        const focused = interaction.options.getFocused().toLowerCase();
+        const teams = await getAllTeamConfigs();
+        const filtered = teams
+            .filter((t) => t.TeamName.toLowerCase().includes(focused))
+            .slice(0, 25);
+        await interaction.respond(
+            filtered.map((t) => ({ name: t.TeamName, value: t.TeamName }))
+        );
+    },
 
     async run(interaction: ChatInputCommandInteraction, _client: Client) {
         await interaction.deferReply({ ephemeral: true });
 
         const teamName = interaction.options.getString("team", true);
 
-        const teamConfig = teamsData.find((t) => t.TeamName === teamName);
+        const teamConfig = await getTeamConfigByName(teamName);
         if (!teamConfig) {
             return interaction.editReply("❌ Team not found.");
         }

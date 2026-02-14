@@ -1,5 +1,5 @@
-import { Workshop, Participant, Session } from "../database";
-import teamsData, { TeamConfig } from "../data";
+import { Workshop, Participant, Session, getTeamConfigByName } from "../database";
+import type { TeamConfig } from "../data";
 import { ActivityTracker } from "./activityTracker";
 import { exportWorkshopToExcel } from "./excelExport";
 import { sendMessageAsBot } from "../voice";
@@ -15,7 +15,10 @@ import {
     ButtonBuilder,
     ButtonStyle,
     TextChannel,
+    GuildMember,
 } from "discord.js";
+
+const GUILD_ID = process.env.GUILD_ID || "";
 
 // Map workshopId → ActivityTracker
 const activeTrackers: Map<string, ActivityTracker> = new Map();
@@ -94,9 +97,11 @@ export async function createWorkshop(
     durationStr: string,
     mainClient: Client
 ): Promise<{ success: boolean; message: string; workshopId?: string }> {
-    // Check if leader already has an active workshop
+    // Check if this specific team config already has an active workshop
+    // For split bots, each sub-bot (Beginner/Advanced) can have its own workshop
     const existingWorkshop = await Workshop.findOne({
         leaderID,
+        teamName: teamConfig.TeamName,
         status: { $in: ["scheduled", "active"] },
     });
 
@@ -104,7 +109,7 @@ export async function createWorkshop(
         return {
             success: false,
             message:
-                "You already have an active workshop. Stop it first with `/stop-workshop` before creating a new one.",
+                `There is already an active workshop for ${teamConfig.TeamName}. Stop it first before creating a new one.`,
         };
     }
 
@@ -193,6 +198,55 @@ async function activateWorkshop(
     }, remaining);
 
     workshopTimers.set(workshopId, timer);
+
+    // DM all team members about the workshop starting
+    await notifyTeamMembersDM(teamConfig, workshop.type, mainClient);
+}
+
+/**
+ * Send a DM to all team members notifying them that a workshop has started.
+ */
+async function notifyTeamMembersDM(
+    teamConfig: TeamConfig,
+    type: string,
+    mainClient: Client
+): Promise<void> {
+    if (!GUILD_ID) return;
+
+    try {
+        const guild = mainClient.guilds.cache.get(GUILD_ID);
+        if (!guild) return;
+
+        // Fetch all guild members (ensure cache is populated)
+        await guild.members.fetch();
+
+        // Collect members that have the team's member roles
+        const roleIds = [teamConfig.MemberRole1ID, teamConfig.MemberRole2ID].filter(Boolean);
+        const notified = new Set<string>();
+
+        for (const roleId of roleIds) {
+            const role = guild.roles.cache.get(roleId);
+            if (!role) continue;
+
+            for (const [, member] of role.members) {
+                if (member.user.bot || notified.has(member.id)) continue;
+                notified.add(member.id);
+
+                try {
+                    await member.send(
+                        `📢 A **${type}** for **${teamConfig.TeamName}** has just started!\n` +
+                        `Join the voice channel now! 🎯`
+                    );
+                } catch {
+                    // User may have DMs disabled — ignore silently
+                }
+            }
+        }
+
+        logDebug("Workshop DM", `Notified ${notified.size} members for ${teamConfig.TeamName}`);
+    } catch (error: any) {
+        logError(`Workshop DM (${teamConfig.TeamName})`, error);
+    }
 }
 
 /**
@@ -266,7 +320,7 @@ export async function continueWorkshop(
     const existingTimer = workshopTimers.get(workshopId);
     if (existingTimer) clearTimeout(existingTimer);
 
-    const teamConfig = teamsData.find((t) => t.TeamName === workshop.teamName);
+    const teamConfig = await getTeamConfigByName(workshop.teamName);
     if (!teamConfig) return false;
 
     const timer = setTimeout(async () => {
@@ -393,7 +447,7 @@ export async function stopWorkshop(
     });
 
     // Generate Excel
-    const teamConfig = teamsData.find((t) => t.TeamName === workshop.teamName);
+    const teamConfig = await getTeamConfigByName(workshop.teamName);
     const filePath = await exportWorkshopToExcel(workshopId, workshop, participants);
 
     // Send Excel via the team's voice bot

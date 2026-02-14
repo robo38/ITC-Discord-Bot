@@ -11,6 +11,19 @@ const THEME3_ROLE = process.env.THEME3_ROLE!;
 export default {
     name: Events.InteractionCreate,
     async execute(interaction : Interaction) {
+        // Handle autocomplete (dynamic team lists from DB)
+        if (interaction.isAutocomplete()) {
+            const command = interaction.client.commands.get(interaction.commandName);
+            if (command?.autocomplete) {
+                try {
+                    await command.autocomplete(interaction);
+                } catch (error: any) {
+                    logError(`Autocomplete /${interaction.commandName}`, error);
+                }
+            }
+            return;
+        }
+
         // Handle slash commands
         if (interaction.isChatInputCommand()) {
             const command = interaction.client.commands.get(interaction.commandName);

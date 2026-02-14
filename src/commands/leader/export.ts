@@ -4,10 +4,11 @@ import {
     Client,
     AttachmentBuilder,
 } from "discord.js";
-import { Workshop, Participant } from "../../database";
+import { Workshop, Participant, getTeamConfigByLeaderRole } from "../../database";
 import { exportWorkshopToExcel } from "../../workshop";
-import teamsData, { BE_ID } from "../../data";
 import { DEV_USER_ID } from "../../utils/permissions";
+
+const BE_ID = process.env.BE_ID || "";
 
 export default {
     data: new SlashCommandBuilder()
@@ -45,9 +46,7 @@ export default {
             }
 
             const memberRoles = member.roles.cache.map((r) => r.id);
-            const teamConfig = teamsData.find((team) => {
-                return team.LeaderID && memberRoles.includes(team.LeaderID);
-            });
+            const teamConfig = await getTeamConfigByLeaderRole(memberRoles);
 
             if (!teamConfig) {
                 return interaction.editReply(

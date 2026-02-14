@@ -4,8 +4,7 @@ import {
     Client,
     EmbedBuilder,
 } from "discord.js";
-import { Workshop } from "../../database";
-import teamsData from "../../data";
+import { Workshop, getTeamConfigByLeaderRole } from "../../database";
 
 export default {
     data: new SlashCommandBuilder()
@@ -22,9 +21,7 @@ export default {
 
         // Find which team this leader belongs to by checking leader role
         const memberRoles = member.roles.cache.map((r) => r.id);
-        const teamConfig = teamsData.find((team) => {
-            return team.LeaderID && memberRoles.includes(team.LeaderID);
-        });
+        const teamConfig = await getTeamConfigByLeaderRole(memberRoles);
 
         if (!teamConfig) {
             return interaction.editReply(

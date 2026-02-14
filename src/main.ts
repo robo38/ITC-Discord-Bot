@@ -8,6 +8,7 @@ import { loginAllVoiceBots } from "./voice";
 import { setMainClient } from "./workshop";
 import { startDashboard, setDashboardClient } from "./dashboard";
 import { initLogger, logError, logSuccess, logDatabase, logDebug } from "./utils/logger";
+import { startCLI } from "./cli";
 
 config();
 
@@ -190,6 +191,9 @@ client.once('clientReady', async () => {
     } catch (error: any) {
         logError("Voice Bots Init Failed", error);
     }
+
+    // Start interactive CLI
+    startCLI(client);
 });
 
 client.login(process.env.TOKEN);

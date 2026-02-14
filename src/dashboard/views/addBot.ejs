@@ -6,11 +6,14 @@
         <div class="navbar-logo">ITC</div>
         <span>Bot Dashboard</span>
     </a>
-    <div class="navbar-right">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-right navbar-links" id="navLinks">
         <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
         <div style="display:flex; align-items:center; gap:8px;">
             <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
-            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;" class="hide-mobile"><%= user.globalName || user.username %></span>
         </div>
         <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
     </div>
@@ -102,7 +105,7 @@
             <!-- Split bot section (hidden by default) -->
             <div id="splitBotSection" style="display:none;">
                 <div class="split-section">
-                    <h3>🟢 Bot 1 (Beginner)</h3>
+                    <h3><span class="dot-icon dot-green"></span> Bot 1 (Beginner)</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Bot Token 1 *</label>
@@ -116,7 +119,7 @@
                 </div>
 
                 <div class="split-section" style="margin-top:12px;">
-                    <h3>🔵 Bot 2 (Advanced)</h3>
+                    <h3><span class="dot-icon dot-blue"></span> Bot 2 (Advanced)</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Bot Token 2 *</label>

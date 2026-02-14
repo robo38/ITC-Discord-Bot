@@ -4,8 +4,9 @@ import {
     Client,
 } from "discord.js";
 import { Workshop, Participant, Session } from "../../database";
-import { BE_ID } from "../../data";
 import { DEV_USER_ID } from "../../utils/permissions";
+
+const BE_ID = process.env.BE_ID || "";
 import { logError, logSuccess } from "../../utils/logger";
 
 export default {

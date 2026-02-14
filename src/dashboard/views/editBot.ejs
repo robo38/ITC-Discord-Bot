@@ -6,11 +6,14 @@
         <div class="navbar-logo">ITC</div>
         <span>Bot Dashboard</span>
     </a>
-    <div class="navbar-right">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-right navbar-links" id="navLinks">
         <span class="badge badge-<%= user.role %>"><%= user.role.toUpperCase() %></span>
         <div style="display:flex; align-items:center; gap:8px;">
             <img src="<%= user.avatarUrl %>" alt="" style="width:28px; height:28px; border-radius:50%;" />
-            <span style="color: var(--text-secondary); font-size: 0.85rem;"><%= user.globalName || user.username %></span>
+            <span style="color: var(--text-secondary); font-size: 0.85rem;" class="hide-mobile"><%= user.globalName || user.username %></span>
         </div>
         <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
     </div>
@@ -24,6 +27,51 @@
 
     <% if (error) { %>
         <div class="alert alert-danger"><%= error %></div>
+    <% } %>
+
+    <!-- ═══ Bot Profile Section ══════════════════════════════════ -->
+    <% if (user.role === 'dev' || user.role === 'be') { %>
+    <div class="card" style="max-width: 800px; margin-bottom:20px;">
+        <h3 style="margin-bottom: 20px; color: var(--accent);">Bot Profile</h3>
+        <div style="display:flex; align-items:flex-start; gap:28px; flex-wrap:wrap;">
+            <!-- Round Avatar Upload -->
+            <div class="profile-avatar-upload" id="avatarUpload">
+                <img id="avatarPreview" src="<%= typeof botAvatarUrl !== 'undefined' && botAvatarUrl ? botAvatarUrl : '/public/assets/default.png' %>" alt="Bot Avatar" />
+                <div class="upload-overlay">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span style="font-size:0.7rem;">Change</span>
+                </div>
+                <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
+            </div>
+
+            <!-- Username & Bio -->
+            <div style="flex:1; min-width:240px;">
+                <div class="form-group">
+                    <label>Bot Username</label>
+                    <input type="text" id="profileUsername" placeholder="Bot display name..." />
+                    <div class="form-hint">Changes the bot's Discord username (rate-limited by Discord)</div>
+                </div>
+                <div class="form-group">
+                    <label>Bot Bio / About</label>
+                    <textarea id="profileBio" rows="3" placeholder="Write something about this bot..." style="
+                        width:100%; max-width:400px; padding:10px 14px;
+                        background:var(--bg-input); border:1px solid var(--border);
+                        border-radius:var(--radius); color:var(--text-primary);
+                        font-size:0.9rem; resize:vertical; min-height:60px; max-height:200px;
+                        font-family:inherit;
+                    "></textarea>
+                    <div class="form-hint">This bio is shown in the bot's Discord profile</div>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="saveProfileBtn">
+                    Update Profile
+                </button>
+                <span id="profileStatus" style="margin-left:12px; font-size:0.85rem; color:var(--text-secondary);"></span>
+            </div>
+        </div>
+    </div>
     <% } %>
 
     <form method="POST" action="/bots/<%= bot._id %>/edit">
@@ -111,7 +159,7 @@
                         <label>Bot Token</label>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <input type="text" value="**********" disabled style="flex:1; opacity:0.5;" />
-                            <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot Token" style="white-space:nowrap;">🔑 Request</button>
+                            <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot Token" style="white-space:nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Request</button>
                         </div>
                     </div>
                     <div class="form-group">
@@ -140,7 +188,7 @@
             <!-- Split bot fields -->
             <div id="splitBotSection" style="display: <%= bot.isSplit ? 'block' : 'none' %>;">
                 <div class="split-section">
-                    <h3>🟢 Bot 1 (Beginner)</h3>
+                    <h3><span class="dot-icon dot-green"></span> Bot 1 (Beginner)</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Bot Token 1</label>
@@ -149,7 +197,7 @@
                             <% } else if (user.role === 'be') { %>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <input type="text" value="**********" disabled style="flex:1; opacity:0.5;" />
-                                    <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 1 Token" style="white-space:nowrap;">🔑 Request</button>
+                                    <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 1 Token" style="white-space:nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Request</button>
                                 </div>
                             <% } else { %>
                                 <input type="text" value="**********" disabled style="opacity:0.5;" />
@@ -163,7 +211,7 @@
                 </div>
 
                 <div class="split-section" style="margin-top: 12px;">
-                    <h3>🔵 Bot 2 (Advanced)</h3>
+                    <h3><span class="dot-icon dot-blue"></span> Bot 2 (Advanced)</h3>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Bot Token 2</label>
@@ -172,7 +220,7 @@
                             <% } else if (user.role === 'be') { %>
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     <input type="text" value="**********" disabled style="flex:1; opacity:0.5;" />
-                                    <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 2 Token" style="white-space:nowrap;">🔑 Request</button>
+                                    <button type="button" class="btn btn-outline btn-sm token-request-btn" data-bot="<%= bot._id %>" data-label="Bot 2 Token" style="white-space:nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Request</button>
                                 </div>
                             <% } else { %>
                                 <input type="text" value="**********" disabled style="opacity:0.5;" />
@@ -221,20 +269,88 @@
                     body: JSON.stringify({ botId: btn.dataset.bot, label: btn.dataset.label })
                 });
                 if (res.ok) {
-                    btn.textContent = '✓ Sent';
+                    btn.textContent = 'Sent';
                     btn.style.color = 'var(--success)';
                     btn.style.borderColor = 'var(--success)';
                 } else {
-                    btn.textContent = '✗ Failed';
+                    btn.textContent = 'Failed';
                     btn.style.color = 'var(--danger)';
-                    setTimeout(function() { btn.textContent = '🔑 Request'; btn.disabled = false; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
+                    setTimeout(function() { btn.textContent = 'Request'; btn.disabled = false; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
                 }
             } catch (e) {
-                btn.textContent = '✗ Error';
-                setTimeout(function() { btn.textContent = '🔑 Request'; btn.disabled = false; }, 3000);
+                btn.textContent = 'Error';
+                setTimeout(function() { btn.textContent = 'Request'; btn.disabled = false; }, 3000);
             }
         });
     });
+
+    // ─── Avatar upload & profile update ──────────────────────────
+    (function() {
+        var avatarUpload = document.getElementById('avatarUpload');
+        var avatarInput = document.getElementById('avatarFileInput');
+        var avatarPreview = document.getElementById('avatarPreview');
+        var saveBtn = document.getElementById('saveProfileBtn');
+        var statusEl = document.getElementById('profileStatus');
+        var avatarDataUrl = null;
+
+        if (!avatarUpload) return; // Not dev/be role
+
+        avatarUpload.addEventListener('click', function() {
+            avatarInput.click();
+        });
+
+        avatarInput.addEventListener('change', function() {
+            var file = avatarInput.files[0];
+            if (!file) return;
+            if (file.size > 8 * 1024 * 1024) {
+                window._toast('Image must be under 8MB');
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                avatarDataUrl = e.target.result;
+                avatarPreview.src = avatarDataUrl;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        saveBtn.addEventListener('click', async function() {
+            var username = document.getElementById('profileUsername').value.trim();
+            var payload = {};
+            if (username) payload.username = username;
+            if (avatarDataUrl) payload.avatarUrl = avatarDataUrl;
+
+            if (!username && !avatarDataUrl) {
+                statusEl.textContent = 'Nothing to update';
+                statusEl.style.color = 'var(--warning)';
+                return;
+            }
+
+            saveBtn.disabled = true;
+            statusEl.textContent = 'Updating...';
+            statusEl.style.color = 'var(--text-secondary)';
+
+            try {
+                var res = await fetch('/api/bots/<%= bot._id %>/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                var data = await res.json();
+                if (data.success) {
+                    statusEl.textContent = (data.message || 'Updated');
+                    statusEl.style.color = 'var(--success)';
+                } else {
+                    statusEl.textContent = (data.message || 'Failed');
+                    statusEl.style.color = 'var(--danger)';
+                }
+            } catch(e) {
+                statusEl.textContent = 'Error';
+                statusEl.style.color = 'var(--danger)';
+            }
+            saveBtn.disabled = false;
+        });
+    })();
 </script>
 
 <%- include('footer') %>
