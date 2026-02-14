@@ -50,13 +50,13 @@
                     <% workshops.forEach(function(ws) { %>
                     <tr>
                         <td style="font-family:monospace; font-size:0.8rem;"><%= ws.workshopId.substring(0, 12) %>...</td>
-                        <td><%= ws.type %></td>
+                        <td><%= ws.type === 'other' && ws.topicName ? ws.topicName : ws.type %></td>
                         <td>
                             <span style="color: <%= ws.status === 'active' ? 'var(--success)' : ws.status === 'completed' ? 'var(--text-secondary)' : 'var(--warning)' %>">
                                 <%= ws.status %>
                             </span>
                         </td>
-                        <td><%= new Date(ws.startTime).toLocaleDateString() %> <%= new Date(ws.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+                        <td class="local-date" data-ts="<%= new Date(ws.startTime).toISOString() %>"></td>
                         <td><%= ws.averageDuration %> min</td>
                         <td><%= ws.participantCount %></td>
                         <td style="text-align:right;">
@@ -114,6 +114,12 @@
 </div>
 
 <script>
+    // Format server-rendered dates client-side (correct timezone)
+    document.querySelectorAll('.local-date').forEach(function(el) {
+        var d = new Date(el.dataset.ts);
+        el.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    });
+
     const panel = document.getElementById('participantsPanel');
     const loading = document.getElementById('participantsLoading');
     const table = document.getElementById('participantsTable');

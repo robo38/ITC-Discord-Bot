@@ -268,13 +268,13 @@
                                     <%= ws.workshopId.substring(0, 12) %>...
                                 </span>
                             </td>
-                            <td><%= ws.type %></td>
+                            <td><%= ws.type === 'other' && ws.topicName ? ws.topicName : ws.type %></td>
                             <td>
                                 <span style="color: <%= ws.status === 'active' ? 'var(--success)' : ws.status === 'completed' ? 'var(--text-secondary)' : 'var(--warning)' %>">
                                     <%= ws.status %>
                                 </span>
                             </td>
-                            <td><%= new Date(ws.startTime).toLocaleDateString() %> <%= new Date(ws.startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) %></td>
+                            <td class="local-date" data-ts="<%= new Date(ws.startTime).toISOString() %>"></td>
                             <td><%= matchedSession ? Math.round(matchedSession.totalDuration / 60000) + ' min' : ws.averageDuration + ' min' %></td>
                             <td><%= matchedSession ? matchedSession.totalParticipants : ws.participantCount %></td>
                             <td style="text-align:right;">
@@ -659,7 +659,13 @@
         return s + 's';
     }
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-    function fmtDate(d) { return new Date(d).toLocaleDateString() + ' ' + new Date(d).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+    function fmtDate(d) { var dt = new Date(d); return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    // Format server-rendered dates client-side (correct timezone)
+    document.querySelectorAll('.local-date').forEach(function(el) {
+        var d = new Date(el.dataset.ts);
+        el.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    });
 
     // ─── Generic modal helper ─────────────────────────────────────
     function setupModal(overlayId, closeBtnId) {

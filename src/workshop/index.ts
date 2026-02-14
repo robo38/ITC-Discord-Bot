@@ -11,5 +11,6 @@ export {
     parseDuration,
     resumeActiveWorkshops,
 } from "./workshopManager";
+export type { WorkshopOptions } from "./workshopManager";
 export { ActivityTracker } from "./activityTracker";
 export { exportWorkshopToExcel } from "./excelExport";
