@@ -87,6 +87,15 @@ export function parseDuration(duration: string): number {
 }
 
 /**
+ * Options for workshop DM notifications and topic.
+ */
+export interface WorkshopOptions {
+    topicName?: string;
+    dmMode?: "send" | "custom" | "none";
+    dmMessage?: string;
+}
+
+/**
  * Create and schedule a new workshop.
  */
 export async function createWorkshop(
@@ -95,7 +104,8 @@ export async function createWorkshop(
     type: "workshop" | "formation" | "other",
     startTime: Date,
     durationStr: string,
-    mainClient: Client
+    mainClient: Client,
+    options: WorkshopOptions = {}
 ): Promise<{ success: boolean; message: string; workshopId?: string }> {
     // Check if this specific team config already has an active workshop
     // For split bots, each sub-bot (Beginner/Advanced) can have its own workshop
@@ -122,6 +132,7 @@ export async function createWorkshop(
         leaderID,
         voiceChannelID: teamConfig.voiceChannelID,
         type,
+        topicName: type === "other" ? options.topicName : undefined,
         startTime,
         averageDuration,
         status: "scheduled",
@@ -135,7 +146,7 @@ export async function createWorkshop(
     const delay = Math.max(0, startMs - now);
 
     setTimeout(async () => {
-        await activateWorkshop(workshopId, teamConfig, mainClient);
+        await activateWorkshop(workshopId, teamConfig, mainClient, options);
     }, delay);
 
     // Schedule 30-min reminder for MemberRole1ID members (if start is >30 min from now)
@@ -148,12 +159,15 @@ export async function createWorkshop(
         reminderTimers.set(workshopId, reminderTimer);
     }
 
+    const displayType = type === "other" && options.topicName ? options.topicName : type;
+    const dmInfo = options.dmMode === "none" ? "\nDM: **disabled**" : options.dmMode === "custom" ? "\nDM: **custom message**" : "";
+
     return {
         success: true,
         message: `Workshop scheduled for **${teamConfig.TeamName}**.\n` +
-            `Type: **${type}**\n` +
+            `Type: **${displayType}**\n` +
             `Starts: <t:${Math.floor(startMs / 1000)}:F>\n` +
-            `Duration: **${durationStr}**`,
+            `Duration: **${durationStr}**` + dmInfo,
         workshopId,
     };
 }
@@ -164,7 +178,8 @@ export async function createWorkshop(
 async function activateWorkshop(
     workshopId: string,
     teamConfig: TeamConfig,
-    mainClient: Client
+    mainClient: Client,
+    options: WorkshopOptions = {}
 ): Promise<void> {
     const workshop = await Workshop.findOne({ workshopId });
     if (!workshop || workshop.status === "completed") return;
@@ -199,17 +214,22 @@ async function activateWorkshop(
 
     workshopTimers.set(workshopId, timer);
 
-    // DM all team members about the workshop starting
-    await notifyTeamMembersDM(teamConfig, workshop.type, mainClient);
+    // DM all team members about the workshop starting (unless disabled)
+    if (options.dmMode !== "none") {
+        const displayType = workshop.type === "other" && workshop.topicName ? workshop.topicName : workshop.type;
+        await notifyTeamMembersDM(teamConfig, displayType, mainClient, options.dmMode === "custom" ? options.dmMessage : undefined);
+    }
 }
 
 /**
  * Send a DM to all team members notifying them that a workshop has started.
+ * If customMessage is provided, it replaces the default message.
  */
 async function notifyTeamMembersDM(
     teamConfig: TeamConfig,
     type: string,
-    mainClient: Client
+    mainClient: Client,
+    customMessage?: string
 ): Promise<void> {
     if (!GUILD_ID) return;
 
@@ -233,10 +253,11 @@ async function notifyTeamMembersDM(
                 notified.add(member.id);
 
                 try {
-                    await member.send(
-                        `📢 A **${type}** for **${teamConfig.TeamName}** has just started!\n` +
-                        `Join the voice channel now! 🎯`
-                    );
+                    const dmText = customMessage
+                        ? customMessage
+                        : `📢 A **${type}** for **${teamConfig.TeamName}** has just started!\n` +
+                          `Join the voice channel now! 🎯`;
+                    await member.send(dmText);
                 } catch {
                     // User may have DMs disabled — ignore silently
                 }

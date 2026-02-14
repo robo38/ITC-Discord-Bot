@@ -43,6 +43,29 @@ export default {
                 .setName("custom-duration")
                 .setDescription("Custom duration (e.g. 45m, 1h, 1h30m). Only if duration = Custom")
                 .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("topic")
+                .setDescription("Topic name (required when type is Other)")
+                .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("dm")
+                .setDescription("DM notification to team members (default: send)")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Send default message", value: "send" },
+                    { name: "Custom message", value: "custom" },
+                    { name: "Don't send", value: "none" }
+                )
+        )
+        .addStringOption((option) =>
+            option
+                .setName("dm-message")
+                .setDescription("Custom DM message (only if dm = Custom message)")
+                .setRequired(false)
         ),
 
     async run(interaction: ChatInputCommandInteraction, client: Client) {
@@ -76,6 +99,23 @@ export default {
         const startTimeStr = interaction.options.getString("start-time", true);
         const durationChoice = interaction.options.getString("duration", true);
         const customDuration = interaction.options.getString("custom-duration");
+        const topicName = interaction.options.getString("topic");
+        const dmMode = (interaction.options.getString("dm") || "send") as "send" | "custom" | "none";
+        const dmMessage = interaction.options.getString("dm-message");
+
+        // Validate: "other" type requires a topic name
+        if (type === "other" && !topicName) {
+            return interaction.editReply(
+                "❌ You must provide a **topic** name when the type is **Other**."
+            );
+        }
+
+        // Validate: custom DM mode requires a message
+        if (dmMode === "custom" && !dmMessage) {
+            return interaction.editReply(
+                "❌ You chose **Custom message** for DM but didn't provide a message. Use the `dm-message` option."
+            );
+        }
 
         // Parse start time
         let startTime: Date;
@@ -110,7 +150,12 @@ export default {
             type,
             startTime,
             durationStr,
-            client
+            client,
+            {
+                topicName: topicName || undefined,
+                dmMode,
+                dmMessage: dmMessage || undefined,
+            }
         );
 
         if (!result.success) {

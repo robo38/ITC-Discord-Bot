@@ -13,6 +13,7 @@ export interface IWorkshop {
     leaderID: string;
     voiceChannelID: string;
     type: "workshop" | "formation" | "other";
+    topicName?: string; // custom topic name when type is "other"
     startTime: Date;
     averageDuration: number; // in minutes
     extensions: IExtension[];
@@ -41,6 +42,7 @@ const workshopSchema = new Schema<IWorkshop>(
             enum: ["workshop", "formation", "other"],
             required: true,
         },
+        topicName: { type: String },
         startTime: { type: Date, required: true },
         averageDuration: { type: Number, required: true },
         extensions: { type: [extensionSchema], default: [] },

@@ -55,6 +55,29 @@ export default {
                 .setName("duration")
                 .setDescription("Duration (for start, e.g. 1h30, 2h, 45m). Default: 1h30")
                 .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("topic")
+                .setDescription("Topic name (required when type is Other)")
+                .setRequired(false)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("dm")
+                .setDescription("DM notification to team members (default: send)")
+                .setRequired(false)
+                .addChoices(
+                    { name: "Send default message", value: "send" },
+                    { name: "Custom message", value: "custom" },
+                    { name: "Don't send", value: "none" }
+                )
+        )
+        .addStringOption((option) =>
+            option
+                .setName("dm-message")
+                .setDescription("Custom DM message (only if dm = Custom message)")
+                .setRequired(false)
         ),
 
     async autocomplete(interaction: AutocompleteInteraction) {
@@ -145,6 +168,23 @@ export default {
                     | "other") || "formation";
             const durationStr =
                 interaction.options.getString("duration") || "1h30";
+            const topicName = interaction.options.getString("topic");
+            const dmMode = (interaction.options.getString("dm") || "send") as "send" | "custom" | "none";
+            const dmMessage = interaction.options.getString("dm-message");
+
+            // Validate: "other" type requires a topic name
+            if (type === "other" && !topicName) {
+                return interaction.editReply(
+                    "❌ You must provide a **topic** name when the type is **Other**."
+                );
+            }
+
+            // Validate: custom DM mode requires a message
+            if (dmMode === "custom" && !dmMessage) {
+                return interaction.editReply(
+                    "❌ You chose **Custom message** for DM but didn't provide a message. Use the `dm-message` option."
+                );
+            }
 
             const result = await createWorkshop(
                 interaction.user.id,
@@ -152,7 +192,12 @@ export default {
                 type,
                 new Date(), // start now
                 durationStr,
-                client
+                client,
+                {
+                    topicName: topicName || undefined,
+                    dmMode,
+                    dmMessage: dmMessage || undefined,
+                }
             );
 
             return interaction.editReply(
