@@ -25,6 +25,34 @@ import { resolveMeta } from "./metaData";
 
 export const dashboardRouter = Router();
 
+// ─── Live duration helpers ───────────────────────────────────────────
+// For sessions still in progress (no leaveTime/mutedAt/undeafenedAt),
+// compute elapsed time from the start timestamp instead of using the
+// stored duration (which is 0 until the session closes).
+function liveVoiceMs(sessions: any[]): number {
+    const now = Date.now();
+    return sessions.reduce((sum: number, s: any) => {
+        if (s.leaveTime) return sum + s.duration;
+        return sum + (now - new Date(s.joinTime).getTime());
+    }, 0);
+}
+
+function liveMicMs(activity: any[]): number {
+    const now = Date.now();
+    return activity.reduce((sum: number, m: any) => {
+        if (m.mutedAt) return sum + m.duration;
+        return sum + (now - new Date(m.unmutedAt).getTime());
+    }, 0);
+}
+
+function liveDeafenMs(activity: any[]): number {
+    const now = Date.now();
+    return activity.reduce((sum: number, d: any) => {
+        if (d.undeafenedAt) return sum + d.duration;
+        return sum + (now - new Date(d.deafenedAt).getTime());
+    }, 0);
+}
+
 const DEV_USER_ID = process.env.DEV_USER_ID || "";
 const BE_ID = process.env.BE_ID || "";
 const ADMIN_ID = process.env.ADMIN_ID || "";
@@ -504,9 +532,10 @@ dashboardRouter.post("/bots/:id/toggle", requireAuth, async (req: AuthRequest, r
     res.redirect("/");
 });
 
-// ─── Web Console (redirect to dev) ──────────────────────────────────
-dashboardRouter.get("/console", requireAuth, (req: AuthRequest, res: Response) => {
-    res.redirect("/dev");
+// ─── Web Console / Terminal ──────────────────────────────────────
+dashboardRouter.get("/console", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!(await hasDevAccess(req.user!))) { res.redirect("/"); return; }
+    res.render("console", { user: req.user, meta: resolveMeta("console") });
 });
 
 dashboardRouter.get("/api/logs", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -784,9 +813,9 @@ dashboardRouter.get("/bots/:id/data", requireAuth, async (req: AuthRequest, res:
 dashboardRouter.get("/api/workshops/:workshopId/participants", requireAuth, async (req: AuthRequest, res: Response) => {
     const participants = await Participant.find({ workshopId: req.params.workshopId }).lean();
     const data = participants.map(p => {
-        const totalVoiceMs = p.voiceSessions.reduce((sum, s) => sum + s.duration, 0);
-        const totalMicMs = p.micActivity.reduce((sum, m) => sum + m.duration, 0);
-        const totalDeafenMs = p.deafenActivity.reduce((sum, d) => sum + d.duration, 0);
+        const totalVoiceMs = liveVoiceMs(p.voiceSessions);
+        const totalMicMs = liveMicMs(p.micActivity);
+        const totalDeafenMs = liveDeafenMs(p.deafenActivity);
         return {
             username: p.username,
             discordId: p.discordId,
@@ -868,9 +897,9 @@ dashboardRouter.get("/bots/:id/export/:workshopId", requireAuth, async (req: Aut
 dashboardRouter.get("/api/sessions/:workshopId/participants", requireAuth, async (req: AuthRequest, res: Response) => {
     const participants = await Participant.find({ workshopId: req.params.workshopId }).lean();
     const data = participants.map(p => {
-        const totalVoiceMs = p.voiceSessions.reduce((sum: number, s: any) => sum + s.duration, 0);
-        const totalMicMs = p.micActivity.reduce((sum: number, m: any) => sum + m.duration, 0);
-        const totalDeafenMs = p.deafenActivity.reduce((sum: number, d: any) => sum + d.duration, 0);
+        const totalVoiceMs = liveVoiceMs(p.voiceSessions);
+        const totalMicMs = liveMicMs(p.micActivity);
+        const totalDeafenMs = liveDeafenMs(p.deafenActivity);
         return {
             username: p.username,
             discordId: p.discordId,
@@ -1093,8 +1122,8 @@ dashboardRouter.get("/api/bots/:id/members", requireAuth, async (req: AuthReques
 
                 for (const p of participants) {
                     workshopsJoined++;
-                    totalVoiceMs += p.voiceSessions.reduce((s: number, v: any) => s + v.duration, 0);
-                    totalMicMs += p.micActivity.reduce((s: number, m: any) => s + m.duration, 0);
+                    totalVoiceMs += liveVoiceMs(p.voiceSessions);
+                    totalMicMs += liveMicMs(p.micActivity);
                     totalMsgs += (p.voiceChatMessages || 0) + (p.memberChatMessages || 0);
                     if (p.stayedUntilEnd) stayedCount++;
                 }
@@ -1172,8 +1201,8 @@ dashboardRouter.get("/api/bots/:id/leaderboard", requireAuth, async (req: AuthRe
             }
             const m = memberMap[p.discordId];
             m.sessions++;
-            m.totalVoiceMs += p.voiceSessions.reduce((s: number, v: any) => s + v.duration, 0);
-            m.totalMicMs += p.micActivity.reduce((s: number, mic: any) => s + mic.duration, 0);
+            m.totalVoiceMs += liveVoiceMs(p.voiceSessions);
+            m.totalMicMs += liveMicMs(p.micActivity);
             m.totalMsgs += (p.voiceChatMessages || 0) + (p.memberChatMessages || 0);
             if (p.stayedUntilEnd) m.stayedCount++;
         }

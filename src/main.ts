@@ -6,6 +6,7 @@ import { loadExistingThemes } from "./utils/participantManager";
 import { connectDB } from "./database";
 import { loginAllVoiceBots } from "./voice";
 import { setMainClient } from "./workshop";
+import { resumeActiveWorkshops } from "./workshop";
 import { startDashboard, setDashboardClient } from "./dashboard";
 import { initLogger, logError, logSuccess, logDatabase, logDebug } from "./utils/logger";
 import { startCLI } from "./cli";
@@ -190,6 +191,13 @@ client.once('clientReady', async () => {
         await loginAllVoiceBots(client);
     } catch (error: any) {
         logError("Voice Bots Init Failed", error);
+    }
+
+    // Resume tracking for any active workshops (recovery after restart)
+    try {
+        await resumeActiveWorkshops(client);
+    } catch (error: any) {
+        logError("Workshop Resume Failed", error);
     }
 
     // Start interactive CLI

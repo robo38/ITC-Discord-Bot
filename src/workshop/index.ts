@@ -9,6 +9,7 @@ export {
     getAllActiveTrackers,
     setMainClient,
     parseDuration,
+    resumeActiveWorkshops,
 } from "./workshopManager";
 export { ActivityTracker } from "./activityTracker";
 export { exportWorkshopToExcel } from "./excelExport";

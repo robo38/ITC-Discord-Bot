@@ -62,6 +62,11 @@ export const pageMeta: Record<string, Partial<PageMeta>> = {
         description:
             "Developer control panel: changelog, online users, login logs, bot management, and live notifications.",
     },
+    console: {
+        title: "Terminal — ITC Bot Dashboard",
+        description:
+            "CLI terminal for direct bot management: run commands, control voice bots, manage workshops and whitelist.",
+    },
 };
 
 /**

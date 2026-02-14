@@ -522,3 +522,60 @@ export function getActiveTracker(workshopId: string): ActivityTracker | undefine
 export function getAllActiveTrackers(): Map<string, ActivityTracker> {
     return activeTrackers;
 }
+
+/**
+ * Resume tracking for any workshops that are still "active" in the database.
+ * Called on bot startup to recover from restarts/crashes.
+ * Re-creates ActivityTrackers, scans current voice channel members,
+ * and re-schedules end-time timers.
+ */
+export async function resumeActiveWorkshops(client: Client): Promise<void> {
+    try {
+        const activeWorkshops = await Workshop.find({ status: "active" });
+        if (activeWorkshops.length === 0) {
+            logDebug("Workshop Resume", "No active workshops to resume");
+            return;
+        }
+
+        logSuccess("Workshop Resume", `Found ${activeWorkshops.length} active workshop(s) to resume`);
+
+        for (const workshop of activeWorkshops) {
+            // Skip if tracker already exists (shouldn't happen on fresh start, but safety check)
+            if (activeTrackers.has(workshop.workshopId)) continue;
+
+            const teamConfig = await getTeamConfigByName(workshop.teamName);
+            if (!teamConfig) {
+                logError("Workshop Resume", `No team config found for ${workshop.teamName}, skipping ${workshop.workshopId}`);
+                continue;
+            }
+
+            // Create new tracker and scan existing voice members
+            const tracker = new ActivityTracker(workshop.workshopId, teamConfig, client);
+            activeTrackers.set(workshop.workshopId, tracker);
+            await tracker.scanExistingMembers();
+
+            // Re-schedule end-time notification
+            // Account for any extensions
+            const totalExtensionMinutes = (workshop.extensions || []).reduce(
+                (sum: number, ext: any) => sum + (ext.additionalMinutes || 0), 0
+            );
+            const totalDurationMs = (workshop.averageDuration + totalExtensionMinutes) * 60_000;
+            const endTimeMs = workshop.startTime.getTime() + totalDurationMs;
+            const remaining = Math.max(0, endTimeMs - Date.now());
+
+            if (remaining > 0) {
+                const timer = setTimeout(async () => {
+                    await notifyLeaderWorkshopEnded(workshop.workshopId, teamConfig, client);
+                }, remaining);
+                workshopTimers.set(workshop.workshopId, timer);
+            } else {
+                // Time already passed — notify leader immediately
+                await notifyLeaderWorkshopEnded(workshop.workshopId, teamConfig, client);
+            }
+
+            logSuccess("Workshop Resume", `Resumed tracking for ${workshop.teamName} (${workshop.workshopId}), ${tracker.trackedCount} member(s) in voice`);
+        }
+    } catch (error: any) {
+        logError("Workshop Resume", error);
+    }
+}
