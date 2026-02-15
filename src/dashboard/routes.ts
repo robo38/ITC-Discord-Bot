@@ -228,7 +228,7 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
         (req.session as any).user = sessionUser;
 
         // Log the login event for dev panel
-        addLoginLog({
+        await addLoginLog({
             discordId: sessionUser.discordId,
             username: sessionUser.username,
             globalName: sessionUser.globalName,
@@ -569,13 +569,13 @@ dashboardRouter.get("/dev", requireAuth, async (req: AuthRequest, res: Response)
 // Login log API
 dashboardRouter.get("/api/dev/login-log", requireAuth, async (req: AuthRequest, res: Response) => {
     if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
-    res.json(getLoginLog());
+    res.json(await getLoginLog());
 });
 
 // All registered users with online/offline status (includes leaders + BE)
 dashboardRouter.get("/api/dev/all-users", requireAuth, async (req: AuthRequest, res: Response) => {
     if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
-    const loginLog = getLoginLog();
+    const loginLog = await getLoginLog();
     const onlineUsers = getOnlineUsers();
     const onlineIds = new Set(onlineUsers.map(u => u.discordId));
 
@@ -1056,8 +1056,11 @@ dashboardRouter.post("/api/bots/:id/workshop/start", requireAuth, async (req: Au
         res.status(403).json({ error: "Forbidden" }); return;
     }
 
-    const { type, duration, startTime: startTimeStr, subBot } = req.body;
+    const { type, duration, startTime: startTimeStr, subBot, topicName, dmMode } = req.body;
     if (!type || !duration) { res.status(400).json({ error: "Missing type or duration" }); return; }
+
+    // Validate: "other" type requires a topic name
+    if (type === "other" && !topicName) { res.status(400).json({ error: "Topic name is required when type is Other" }); return; }
 
     const mainClient = getDashboardClient();
     if (!mainClient) { res.status(500).json({ error: "Main bot not ready" }); return; }
@@ -1080,6 +1083,10 @@ dashboardRouter.post("/api/bots/:id/workshop/start", requireAuth, async (req: Au
             startTime,
             duration,
             mainClient,
+            {
+                topicName: topicName || undefined,
+                dmMode: (dmMode as "send" | "none") || "send",
+            },
         );
         if (result.success) emitBotDataUpdate(bot.teamName, { event: "workshop:started", detail: result });
         res.json(result);

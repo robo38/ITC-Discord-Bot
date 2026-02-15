@@ -1,6 +1,7 @@
 import { Server as SocketServer, Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
 import { executeCommand } from "../cli";
+import { LoginLog } from "../database/models/LoginLog";
 
 // ─── Singleton Socket.IO instance ────────────────────────────────────
 let _io: SocketServer | null = null;
@@ -19,7 +20,7 @@ interface OnlineUser {
 
 const _onlineUsers = new Map<string, OnlineUser>();
 
-// ─── Login log (in-memory ring buffer) ───────────────────────────────
+// ─── Login log (persisted in MongoDB) ────────────────────────────────
 interface LoginLogEntry {
     discordId: string;
     username: string;
@@ -29,17 +30,30 @@ interface LoginLogEntry {
     timestamp: number;
 }
 
-const _loginLog: LoginLogEntry[] = [];
 const LOGIN_LOG_MAX = 200;
 
-export function addLoginLog(entry: Omit<LoginLogEntry, "timestamp">): void {
-    _loginLog.unshift({ ...entry, timestamp: Date.now() });
-    if (_loginLog.length > LOGIN_LOG_MAX) _loginLog.pop();
-    _io?.to("dev").emit("dev:login", _loginLog[0]);
+export async function addLoginLog(entry: Omit<LoginLogEntry, "timestamp">): Promise<void> {
+    const timestamp = Date.now();
+    try {
+        await LoginLog.create({ ...entry, timestamp: new Date(timestamp) });
+    } catch { /* silent */ }
+    _io?.to("dev").emit("dev:login", { ...entry, timestamp });
 }
 
-export function getLoginLog(): LoginLogEntry[] {
-    return _loginLog;
+export async function getLoginLog(): Promise<LoginLogEntry[]> {
+    try {
+        const docs = await LoginLog.find().sort({ timestamp: -1 }).limit(LOGIN_LOG_MAX).lean();
+        return docs.map(d => ({
+            discordId: d.discordId,
+            username: d.username,
+            globalName: d.globalName,
+            avatarUrl: d.avatarUrl,
+            role: d.role,
+            timestamp: new Date(d.timestamp).getTime(),
+        }));
+    } catch {
+        return [];
+    }
 }
 
 export function getOnlineUsers(): OnlineUser[] {

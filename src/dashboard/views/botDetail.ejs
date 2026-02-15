@@ -360,6 +360,10 @@
                         <option value="1h">1h</option>
                     </select>
                 </div>
+                <div class="form-group" id="wsTopicGroup" style="grid-column: 1 / -1; display:none;">
+                    <label>Topic Name</label>
+                    <input type="text" id="wsTopic" placeholder="Enter the topic name..." style="font-size:0.85rem;" />
+                </div>
                 <div class="form-group" style="grid-column: 1 / -1;">
                     <label>Start Time</label>
                     <input type="datetime-local" id="wsStartTime" style="font-size:0.85rem;" />
@@ -837,6 +841,14 @@
     var BOT_IS_SPLIT = <%= bot.isSplit ? 'true' : 'false' %>;
     document.getElementById('wsModalCancel').addEventListener('click', function() { wsModal.classList.remove('active'); });
 
+    // Show/hide topic input when type changes
+    var wsTypeSelect = document.getElementById('wsType');
+    var wsTopicGroup = document.getElementById('wsTopicGroup');
+    wsTypeSelect.addEventListener('change', function() {
+        wsTopicGroup.style.display = wsTypeSelect.value === 'other' ? '' : 'none';
+        if (wsTypeSelect.value !== 'other') document.getElementById('wsTopic').value = '';
+    });
+
     <% var activeWs = workshops.find(function(w) { return w.status === 'active'; }); %>
     <% var scheduledWs = workshops.find(function(w) { return w.status === 'scheduled'; }); %>
     <% if (activeWs) { %>
@@ -884,9 +896,43 @@
         var type = document.getElementById('wsType').value;
         var duration = document.getElementById('wsDuration').value;
         var startTimeInput = document.getElementById('wsStartTime').value;
-        var body = { type: type, duration: duration };
+        var topicName = document.getElementById('wsTopic').value.trim();
+
+        // Validate topic for "other" type
+        if (type === 'other' && !topicName) {
+            var alertEl = document.getElementById('wsModalAlert');
+            alertEl.textContent = 'Please enter a topic name when type is "Other".';
+            alertEl.style.display = '';
+            alertEl.style.background = 'rgba(255,107,107,0.1)';
+            alertEl.style.color = 'var(--danger)';
+            alertEl.style.border = '1px solid var(--danger)';
+            return;
+        }
+
+        // Close the workshop modal first
+        wsModal.classList.remove('active');
+
+        // Ask about announcing to members
+        window.showConfirm({
+            title: 'Announce to Members?',
+            message: 'Do you want to send a DM notification to all team members about this workshop?',
+            confirmText: 'Yes, Announce',
+            cancelText: 'No, Skip',
+            type: 'info',
+            onConfirm: function() {
+                sendWorkshopStart(type, duration, startTimeInput, topicName, subBot, 'send');
+            },
+            onCancel: function() {
+                sendWorkshopStart(type, duration, startTimeInput, topicName, subBot, 'none');
+            }
+        });
+    }
+
+    function sendWorkshopStart(type, duration, startTimeInput, topicName, subBot, dmMode) {
+        var body = { type: type, duration: duration, dmMode: dmMode };
         if (startTimeInput) body.startTime = startTimeInput;
         if (subBot !== undefined) body.subBot = subBot;
+        if (type === 'other' && topicName) body.topicName = topicName;
 
         // Disable all start buttons
         var btns = document.querySelectorAll('#wsStartBtn, #wsStartBeginner, #wsStartAdvanced');
@@ -897,7 +943,6 @@
             body: JSON.stringify(body)
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
-                wsModal.classList.remove('active');
                 wsStatusEl.innerHTML = '<span class="dot-icon dot-green"></span> Workshop started!';
                 wsOpenBtn.style.display = 'none';
                 wsStopBtn.style.display = '';
@@ -910,9 +955,11 @@
                 alertEl.style.background = 'rgba(255,107,107,0.1)';
                 alertEl.style.color = 'var(--danger)';
                 alertEl.style.border = '1px solid var(--danger)';
+                wsModal.classList.add('active');
                 btns.forEach(function(b) { b.disabled = false; b.style.opacity = ''; });
             }
         }).catch(function() {
+            wsModal.classList.add('active');
             btns.forEach(function(b) { b.disabled = false; b.style.opacity = ''; });
         });
     }

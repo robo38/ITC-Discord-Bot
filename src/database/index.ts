@@ -11,6 +11,8 @@ export { Whitelist } from "./models/Whitelist";
 export type { IWhitelist } from "./models/Whitelist";
 export { DevMode } from "./models/DevMode";
 export type { IDevMode } from "./models/DevMode";
+export { LoginLog } from "./models/LoginLog";
+export type { ILoginLog } from "./models/LoginLog";
 export {
     toTeamConfig,
     getAllTeamConfigs,
