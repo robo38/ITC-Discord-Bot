@@ -4,6 +4,7 @@ import { Workshop } from "../database/models/Workshop";
 import { Participant } from "../database/models/Participant";
 import { Session } from "../database/models/Session";
 import { Whitelist } from "../database/models/Whitelist";
+import { DevMode } from "../database/models/DevMode";
 import { requireAuth, AuthRequest, DashboardUser } from "./auth";
 import { getOAuthUrl, exchangeCode, getOAuthUser, avatarUrl } from "./discord";
 import { getDashboardClient } from "./server";
@@ -77,6 +78,11 @@ async function hasDevAccess(user: DashboardUser): Promise<boolean> {
 /** Check if user is the actual dev (not just whitelisted) */
 function isDevOwner(user: DashboardUser): boolean {
     return user.role === "dev";
+}
+
+/** Check if user is the real owner (DEV_USER_ID) — only they can grant dev mode */
+function isRealOwner(user: DashboardUser): boolean {
+    return user.discordId === DEV_USER_ID;
 }
 
 function getRedirectUri(req: Request): string {
@@ -180,7 +186,10 @@ dashboardRouter.get("/auth/callback", async (req: Request, res: Response) => {
         let role: "dev" | "be" | "admin" | "leader";
         let leaderTeamIds: string[] = [];
 
-        if (discordUser.id === DEV_USER_ID) {
+        // Check if user has dev mode granted
+        const hasDevMode = await DevMode.findOne({ discordId: discordUser.id }).lean();
+
+        if (discordUser.id === DEV_USER_ID || hasDevMode) {
             role = "dev";
         } else if (ADMIN_ID && userRoleIds.includes(ADMIN_ID)) {
             role = "admin";
@@ -554,7 +563,7 @@ dashboardRouter.get("/dev", requireAuth, async (req: AuthRequest, res: Response)
     if (!(await hasDevAccess(req.user!))) { res.redirect("/"); return; }
     const bots = await BotConfig.find().sort({ teamName: 1 }).lean();
     const whitelistIds = (await Whitelist.find().lean()).map(w => w.discordId);
-    res.render("dev", { user: req.user, bots, whitelistIds, meta: resolveMeta("dev") });
+    res.render("dev", { user: req.user, bots, whitelistIds, isRealOwner: isRealOwner(req.user!), meta: resolveMeta("dev") });
 });
 
 // Login log API
@@ -689,15 +698,18 @@ dashboardRouter.get("/api/dev/all-users", requireAuth, async (req: AuthRequest, 
         }
     } catch { /* silent */ }
 
-    // Add whitelist status
+    // Add whitelist & dev mode status
     const whitelistEntries = await Whitelist.find().lean();
     const whitelistIds = new Set(whitelistEntries.map(w => w.discordId));
+    const devModeEntries = await DevMode.find().lean();
+    const devModeIds = new Set(devModeEntries.map(d => d.discordId));
 
     // Sort: online first, then by role priority (DEV > ADMIN > BE > LEADER), then by lastSeen
     const rolePriority: Record<string, number> = { dev: 0, admin: 1, be: 2, leader: 3 };
     const users = Array.from(seen.values()).map(u => ({
         ...u,
         isWhitelisted: whitelistIds.has(u.discordId),
+        isDevMode: devModeIds.has(u.discordId),
     })).sort((a, b) => {
         if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
         const rp = (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99);
@@ -746,6 +758,31 @@ dashboardRouter.get("/api/dev/whitelist", requireAuth, async (req: AuthRequest, 
     if (!(await hasDevAccess(req.user!))) { res.status(403).json({ error: "Forbidden" }); return; }
     const list = await Whitelist.find().lean();
     res.json(list);
+});
+
+// ─── Dev Mode management (real owner only) ───────────────────────────
+dashboardRouter.post("/api/dev/devmode/add", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isRealOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const { discordId } = req.body;
+    if (!discordId) { res.status(400).json({ error: "Missing discordId" }); return; }
+    try {
+        await DevMode.findOneAndUpdate(
+            { discordId },
+            { discordId, addedBy: req.user!.discordId },
+            { upsert: true }
+        );
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+dashboardRouter.post("/api/dev/devmode/remove", requireAuth, async (req: AuthRequest, res: Response) => {
+    if (!isRealOwner(req.user!)) { res.status(403).json({ error: "Forbidden" }); return; }
+    const { discordId } = req.body;
+    if (!discordId) { res.status(400).json({ error: "Missing discordId" }); return; }
+    await DevMode.deleteOne({ discordId });
+    res.json({ success: true });
 });
 
 // Bot reconnect API (dev only)

@@ -9,6 +9,8 @@ export { BotConfig } from "./models/BotConfig";
 export type { IBotConfig, ISplitConfig } from "./models/BotConfig";
 export { Whitelist } from "./models/Whitelist";
 export type { IWhitelist } from "./models/Whitelist";
+export { DevMode } from "./models/DevMode";
+export type { IDevMode } from "./models/DevMode";
 export {
     toTeamConfig,
     getAllTeamConfigs,

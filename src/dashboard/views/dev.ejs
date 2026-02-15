@@ -339,19 +339,21 @@
                 lastSeenStr = ' &middot; Last seen ' + d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             }
             var wlBadge = u.isWhitelisted ? ' <span style="font-size:0.65rem;padding:1px 6px;border-radius:6px;background:rgba(230,57,70,0.15);color:var(--accent);border:1px solid rgba(230,57,70,0.3);">WL</span>' : '';
+            var devBadge = u.isDevMode ? ' <span style="font-size:0.65rem;padding:1px 6px;border-radius:6px;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);">DEV</span>' : '';
 
             html += '<div class="online-user" style="opacity:' + opacity + ';" data-ctx="dev-user"' +
                 ' data-discord-id="' + escapeHtml(u.discordId) + '"' +
                 ' data-username="' + escapeHtml(u.globalName || u.username) + '"' +
                 ' data-role="' + escapeHtml(u.role) + '"' +
                 ' data-online="' + (u.isOnline ? '1' : '0') + '"' +
-                ' data-whitelisted="' + (u.isWhitelisted ? '1' : '0') + '">' +
+                ' data-whitelisted="' + (u.isWhitelisted ? '1' : '0') + '"' +
+                ' data-devmode="' + (u.isDevMode ? '1' : '0') + '">' +
                 '<div style="position:relative; flex-shrink:0;">' +
                     '<img src="' + (u.avatarUrl || '') + '" alt="" style="width:32px;height:32px;border-radius:50%;" />' +
                     '<span style="position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;background:' + dotColor + ';' + dotShadow + 'border:2px solid var(--bg-primary);"></span>' +
                 '</div>' +
                 '<div style="flex:1;">' +
-                    '<div style="font-weight:600; font-size:0.9rem;">' + escapeHtml(u.globalName || u.username) + wlBadge + '</div>' +
+                    '<div style="font-weight:600; font-size:0.9rem;">' + escapeHtml(u.globalName || u.username) + devBadge + wlBadge + '</div>' +
                     '<div style="font-size:0.78rem; color:var(--text-secondary);">' +
                         '<span class="badge badge-' + u.role + '" style="font-size:0.7rem; padding:2px 8px;">' + u.role.toUpperCase() + '</span>' +
                         (u.isOnline ? '<span style="margin-left:4px;display:inline-flex;align-items:center;gap:3px;"><span class="dot-icon dot-green" style="width:7px;height:7px;"></span><span style="color:var(--success);">online</span></span>' : '<span style="margin-left:4px;display:inline-flex;align-items:center;gap:3px;"><span class="dot-icon dot-red" style="width:7px;height:7px;"></span><span style="color:var(--danger);">offline</span></span>') +
@@ -371,6 +373,7 @@
     fetchAllUsers();
 
     var IS_DEV_OWNER = '<%= user.role %>' === 'dev';
+    var IS_REAL_OWNER = <%= typeof isRealOwner !== 'undefined' ? isRealOwner : false %>;
 
     // ─── User right-click context menu ───────────────────────────
     document.getElementById('onlineUsersList').addEventListener('contextmenu', function(e) {
@@ -384,6 +387,7 @@
         var role = userEl.dataset.role;
         var isOnline = userEl.dataset.online === '1';
         var isWhitelisted = userEl.dataset.whitelisted === '1';
+        var isDevMode = userEl.dataset.devmode === '1';
         var I = window._ctxIcons;
 
         var items = [
@@ -443,6 +447,64 @@
                                 }).then(function(r) { return r.json(); }).then(function(d) {
                                     if (d.success) {
                                         window._toast('Added to whitelist');
+                                        fetchAllUsers();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Dev Mode toggle (real owner only, not for the owner themselves)
+        if (IS_REAL_OWNER && discordId !== '<%= user.discordId %>') {
+            if (!items.some(function(it) { return it.divider; })) items.push({ divider: true });
+            if (isDevMode) {
+                items.push({
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="11" x2="23" y2="11"/></svg>',
+                    label: 'Remove Dev Mode', danger: true,
+                    action: function() {
+                        window.showConfirm({
+                            title: 'Remove Dev Mode',
+                            message: 'Remove dev mode from ' + username + '? They will lose full access.',
+                            confirmText: 'Remove',
+                            cancelText: 'Cancel',
+                            type: 'danger',
+                            onConfirm: function() {
+                                fetch('/api/dev/devmode/remove', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ discordId: discordId })
+                                }).then(function(r) { return r.json(); }).then(function(d) {
+                                    if (d.success) {
+                                        window._toast('Dev mode removed from ' + username);
+                                        fetchAllUsers();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            } else {
+                items.push({
+                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>',
+                    label: 'Grant Dev Mode',
+                    action: function() {
+                        window.showConfirm({
+                            title: 'Grant Dev Mode',
+                            message: username + ' will get full access to the dashboard (whitelist, kick, bot control, etc.).',
+                            confirmText: 'Grant',
+                            cancelText: 'Cancel',
+                            type: 'success',
+                            onConfirm: function() {
+                                fetch('/api/dev/devmode/add', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ discordId: discordId })
+                                }).then(function(r) { return r.json(); }).then(function(d) {
+                                    if (d.success) {
+                                        window._toast('Dev mode granted to ' + username);
                                         fetchAllUsers();
                                     }
                                 });
