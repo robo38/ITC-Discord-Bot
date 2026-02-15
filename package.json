@@ -1,4 +1,13 @@
 {
+  "name": "itc-discord-bot",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
   "dependencies": {
     "@discordjs/voice": "^0.19.0",
     "@discordjs/ws": "^2.0.4",
@@ -19,21 +28,5 @@
     "socket.io": "^4.8.3",
     "sodium-native": "^5.0.10",
     "xlsx": "^0.18.5"
-  },
-  "name": "itcb",
-  "module": "apps/main.ts",
-  "type": "module",
-  "scripts": {
-    "start": "bun run src/main.ts",
-    "dev": "bun --hot run src/main.ts"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "engines": {
-    "bun": ">=1.1.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5.9.3"
   }
 }
