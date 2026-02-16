@@ -11,3 +11,16 @@ export {
     activateVoiceBot,
     updateBotProfile,
 } from "./voiceBotManager";
+
+export {
+    startPresenceUpdates,
+    stopPresenceUpdates,
+    stopAllPresenceUpdates,
+    refreshPresence,
+    setWorkshopActive,
+    setWorkshopScheduled,
+    setWorkshopInactive,
+    resolveLeaderAvatar,
+    updatePresence,
+    getWorkshopState,
+} from "./richPresence";

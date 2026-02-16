@@ -14,6 +14,12 @@ import { TeamConfig } from "../data";
 import { loadTeamConfigsFromDB } from "../dashboard/loadConfigs";
 import { logError, logSuccess, logDebug } from "../utils/logger";
 import { emitBotStatus } from "../dashboard/socketManager";
+import {
+    startPresenceUpdates,
+    stopPresenceUpdates,
+    stopAllPresenceUpdates,
+    refreshPresence,
+} from "./richPresence";
 
 interface VoiceBotInstance {
     client: Client;
@@ -167,6 +173,9 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             instance.backoffMs = MIN_BACKOFF;
             logSuccess(`${tag} Joined voice`, channel.name);
             emitBotStatus(config.TeamName, { status: "connected", detail: channel.name });
+
+            // Start/refresh rich presence updates
+            startPresenceUpdates(client, config);
         } catch (err: any) {
             safeDestroy(connection);
             instance.connection = null;
@@ -292,6 +301,20 @@ export async function loginAllVoiceBots(mainClient: Client): Promise<void> {
                     }
                 });
 
+                // Refresh presence when users join/leave the team's voice channel
+                botClient.on("voiceStateUpdate", async (oldState, newState) => {
+                    // Skip bot's own state changes (handled above)
+                    if (newState.member?.id === botClient.user?.id) return;
+
+                    const channelId = teamConfig.voiceChannelID;
+                    if (!channelId) return;
+
+                    // Only refresh if the change involves our tracked channel
+                    if (oldState.channelId === channelId || newState.channelId === channelId) {
+                        await refreshPresence(teamConfig.TeamName, botClient, teamConfig);
+                    }
+                });
+
                 // Kick logging
                 botClient.on("guildDelete", async (guild) => {
                     logError(`${tag} Kicked from guild`, `${guild.name} (${guild.id})`);
@@ -372,6 +395,18 @@ export async function loginSingleVoiceBot(teamConfig: TeamConfig, mainClient: Cl
             }
         });
 
+        // Refresh presence when users join/leave the team's voice channel
+        botClient.on("voiceStateUpdate", async (oldState, newState) => {
+            if (newState.member?.id === botClient.user?.id) return;
+
+            const channelId = teamConfig.voiceChannelID;
+            if (!channelId) return;
+
+            if (oldState.channelId === channelId || newState.channelId === channelId) {
+                await refreshPresence(teamConfig.TeamName, botClient, teamConfig);
+            }
+        });
+
         botClient.on("guildDelete", async (guild) => {
             logError(`${tag} Kicked from guild`, `${guild.name} (${guild.id})`);
         });
@@ -431,6 +466,9 @@ export async function sendMessageAsBot(
  * Destroy all voice bots (graceful shutdown).
  */
 export async function destroyAllVoiceBots(): Promise<void> {
+    // Stop all rich presence updates
+    stopAllPresenceUpdates();
+
     for (const [name, instance] of voiceBots) {
         try {
             if (instance.rejoinTimer) {
@@ -496,6 +534,9 @@ export async function deactivateVoiceBot(teamName: string): Promise<boolean> {
     }
     safeDestroy(instance.connection);
     instance.connection = null;
+
+    // Stop rich presence updates
+    stopPresenceUpdates(teamName);
 
     // Set bot presence to invisible/offline
     try {

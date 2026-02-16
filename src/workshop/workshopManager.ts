@@ -2,13 +2,20 @@ import { Workshop, Participant, Session, getTeamConfigByName } from "../database
 import type { TeamConfig } from "../data";
 import { ActivityTracker } from "./activityTracker";
 import { exportWorkshopToExcel } from "./excelExport";
-import { sendMessageAsBot } from "../voice";
+import { sendMessageAsBot, getVoiceBot } from "../voice";
 import { logError, logSuccess, logDebug } from "../utils/logger";
 import {
     emitSessionStarted,
     emitSessionStopped,
     emitWorkshopReminder,
 } from "../dashboard/socketManager";
+import {
+    setWorkshopActive,
+    setWorkshopScheduled,
+    setWorkshopInactive,
+    resolveLeaderAvatar,
+    refreshPresence,
+} from "../voice/richPresence";
 import {
     Client,
     ActionRowBuilder,
@@ -162,6 +169,13 @@ export async function createWorkshop(
     const displayType = type === "other" && options.topicName ? options.topicName : type;
     const dmInfo = options.dmMode === "none" ? "\nDM: **disabled**" : options.dmMode === "custom" ? "\nDM: **custom message**" : "";
 
+    // Update rich presence to show scheduled workshop
+    setWorkshopScheduled(teamConfig.TeamName, startTime, type, options.topicName);
+    const voiceBot = getVoiceBot(teamConfig.TeamName);
+    if (voiceBot) {
+        await refreshPresence(teamConfig.TeamName, voiceBot.client, teamConfig);
+    }
+
     return {
         success: true,
         message: `Workshop scheduled for **${teamConfig.TeamName}**.\n` +
@@ -218,6 +232,26 @@ async function activateWorkshop(
     if (options.dmMode !== "none") {
         const displayType = workshop.type === "other" && workshop.topicName ? workshop.topicName : workshop.type;
         await notifyTeamMembersDM(teamConfig, displayType, mainClient, options.dmMode === "custom" ? options.dmMessage : undefined);
+    }
+
+    // Update rich presence to show active workshop with leader avatar
+    const guildId = process.env.GUILD_ID || "";
+    let leaderAvatarURL: string | undefined;
+    if (teamConfig.LeaderID && guildId) {
+        leaderAvatarURL = await resolveLeaderAvatar(mainClient, teamConfig.LeaderID, guildId);
+    }
+    setWorkshopActive(
+        teamConfig.TeamName,
+        workshop.leaderID,
+        workshop.type,
+        workshop.startTime,
+        workshop.averageDuration,
+        workshop.topicName,
+        leaderAvatarURL,
+    );
+    const voiceBot = getVoiceBot(teamConfig.TeamName);
+    if (voiceBot) {
+        await refreshPresence(teamConfig.TeamName, voiceBot.client, teamConfig);
     }
 }
 
@@ -432,6 +466,16 @@ export async function stopWorkshop(
         activeTrackers.delete(workshopId);
     }
 
+    // Update rich presence to show workshop ended
+    setWorkshopInactive(workshop.teamName);
+    const voiceBot = getVoiceBot(workshop.teamName);
+    if (voiceBot) {
+        const teamConfig = await getTeamConfigByName(workshop.teamName);
+        if (teamConfig) {
+            await refreshPresence(workshop.teamName, voiceBot.client, teamConfig);
+        }
+    }
+
     // Mark participants who are still in voice as stayed until end
     const participants = await Participant.find({ workshopId });
     const totalParticipants = participants.length;
@@ -595,6 +639,27 @@ export async function resumeActiveWorkshops(client: Client): Promise<void> {
             }
 
             logSuccess("Workshop Resume", `Resumed tracking for ${workshop.teamName} (${workshop.workshopId}), ${tracker.trackedCount} member(s) in voice`);
+
+            // Restore rich presence for resumed workshop
+            const totalDuration = workshop.averageDuration + totalExtensionMinutes;
+            const guildId = process.env.GUILD_ID || "";
+            let leaderAvatarURL: string | undefined;
+            if (teamConfig.LeaderID && guildId) {
+                leaderAvatarURL = await resolveLeaderAvatar(client, teamConfig.LeaderID, guildId);
+            }
+            setWorkshopActive(
+                teamConfig.TeamName,
+                workshop.leaderID,
+                workshop.type,
+                workshop.startTime,
+                totalDuration,
+                workshop.topicName,
+                leaderAvatarURL,
+            );
+            const voiceBot = getVoiceBot(teamConfig.TeamName);
+            if (voiceBot) {
+                await refreshPresence(teamConfig.TeamName, voiceBot.client, teamConfig);
+            }
         }
     } catch (error: any) {
         logError("Workshop Resume", error);
