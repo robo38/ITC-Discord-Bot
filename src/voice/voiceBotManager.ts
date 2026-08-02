@@ -25,27 +25,20 @@ interface VoiceBotInstance {
     client: Client;
     config: TeamConfig;
     connection: VoiceConnection | null;
-    /** Prevent overlapping join attempts */
     joining: boolean;
-    /** Pending rejoin timer (so we can cancel duplicates) */
     rejoinTimer: ReturnType<typeof setTimeout> | null;
-    /** Current backoff delay in ms */
     backoffMs: number;
-    /** Track last connection error message to suppress duplicates */
     lastErrorMsg: string;
     lastErrorTime: number;
-    /** Manually disconnected — don't auto-rejoin */
     disconnected: boolean;
 }
 
 const voiceBots: Map<string, VoiceBotInstance> = new Map();
 
-const MIN_BACKOFF = 5_000;   // 5 seconds
-const MAX_BACKOFF = 120_000; // 2 minutes
-/** Suppress duplicate errors within this window */
-const ERROR_DEDUP_MS = 30_000; // 30 seconds
+const MIN_BACKOFF = 5_000;
+const MAX_BACKOFF = 120_000;
+const ERROR_DEDUP_MS = 30_000;
 
-// ─── Catch uncaught errors from destroyed sockets (kStateSymbol null) ──
 process.on("uncaughtException", (err) => {
     const msg = err?.message || "";
     if (
@@ -54,16 +47,12 @@ process.on("uncaughtException", (err) => {
         msg.includes("socket closed") ||
         msg.includes("IP discovery")
     ) {
-        // Suppress known voice socket crash — already handled by reconnect logic
         console.error("[VoiceBot] Suppressed uncaught socket error:", msg);
         return;
     }
-    // Re-throw unknown errors
     console.error("[FATAL] Uncaught exception:", err);
-    // Don't exit — let the bot continue running
 });
 
-/** Safely destroy a VoiceConnection (no-op if already destroyed) */
 function safeDestroy(connection: VoiceConnection | null): void {
     if (!connection) return;
     try {
@@ -71,37 +60,28 @@ function safeDestroy(connection: VoiceConnection | null): void {
             connection.destroy();
         }
     } catch {
-        // Already destroyed — ignore
     }
 }
 
-/**
- * Schedule a rejoin with exponential backoff.
- * If keepBackoff=true, don't cancel existing timer — just no-op if one is pending.
- */
 function scheduleRejoin(instance: VoiceBotInstance, reason: string, keepBackoff = false): void {
     const tag = `[VoiceBot][${instance.config.TeamName}]`;
 
-    // If manually disconnected, don't rejoin
     if (instance.disconnected) {
         logDebug(tag, `Skipped rejoin (manually disconnected): ${reason}`);
         return;
     }
 
-    // If keepBackoff and a rejoin is already scheduled, don't reset it
     if (keepBackoff && instance.rejoinTimer) {
         logDebug(tag, `Rejoin already pending, ignoring: ${reason}`);
         return;
     }
 
-    // Cancel any existing pending rejoin
     if (instance.rejoinTimer) {
         clearTimeout(instance.rejoinTimer);
         instance.rejoinTimer = null;
     }
 
     const delay = instance.backoffMs;
-    // Increase backoff for next time (exponential with jitter)
     instance.backoffMs = Math.min(instance.backoffMs * 2 + Math.random() * 1000, MAX_BACKOFF);
 
     logDebug(`${tag} ${reason}`, `retrying in ${Math.round(delay / 1000)}s`);
@@ -112,9 +92,6 @@ function scheduleRejoin(instance: VoiceBotInstance, reason: string, keepBackoff 
     }, delay);
 }
 
-/**
- * Create a single voice bot client for a team.
- */
 function createVoiceBotClient(): Client {
     return new Client({
         intents: [
@@ -126,9 +103,6 @@ function createVoiceBotClient(): Client {
     });
 }
 
-/**
- * Join the assigned voice channel for a team bot.
- */
 async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
     const { client, config } = instance;
     const tag = `[VoiceBot][${config.TeamName}]`;
@@ -138,7 +112,6 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
         return;
     }
 
-    // Prevent overlapping join attempts
     if (instance.joining) return;
     instance.joining = true;
 
@@ -152,7 +125,6 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
 
         const guild = await client.guilds.fetch(channel.guildId);
 
-        // Destroy any stale connection before creating a new one
         safeDestroy(instance.connection);
         instance.connection = null;
 
@@ -165,16 +137,13 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             group: client.user?.id,
         });
 
-        // Wait for the connection to become ready
         try {
             await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
             instance.connection = connection;
-            // Reset backoff on successful connection
             instance.backoffMs = MIN_BACKOFF;
             logSuccess(`${tag} Joined voice`, channel.name);
             emitBotStatus(config.TeamName, { status: "connected", detail: channel.name });
 
-            // Start/refresh rich presence updates
             startPresenceUpdates(client, config);
         } catch (err: any) {
             safeDestroy(connection);
@@ -184,14 +153,12 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             return;
         }
 
-        // Handle disconnections — auto-rejoin
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
             try {
                 await Promise.race([
                     entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
                     entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
                 ]);
-                // Connection is recovering on its own — do nothing
             } catch {
                 safeDestroy(connection);
                 instance.connection = null;
@@ -204,19 +171,17 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             const errMsg = error?.message || String(error);
             const now = Date.now();
 
-            // Suppress duplicate errors within dedup window
             if (
                 errMsg === instance.lastErrorMsg &&
                 now - instance.lastErrorTime < ERROR_DEDUP_MS
             ) {
-                return; // silently skip
+                return;
             }
             instance.lastErrorMsg = errMsg;
             instance.lastErrorTime = now;
 
             logError(`${tag} Connection error`, error);
 
-            // If it's a socket/IP discovery error, destroy and schedule rejoin
             if (
                 errMsg.includes("socket closed") ||
                 errMsg.includes("IP discovery") ||
@@ -224,7 +189,6 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
             ) {
                 safeDestroy(connection);
                 if (instance.connection === connection) instance.connection = null;
-                // Use keepBackoff=true so we don't reset a pending rejoin timer
                 scheduleRejoin(instance, "Socket error", true);
             }
         });
@@ -236,9 +200,6 @@ async function joinAssignedChannel(instance: VoiceBotInstance): Promise<void> {
     }
 }
 
-/**
- * Login all voice bots from database config and join their channels.
- */
 export async function loginAllVoiceBots(mainClient: Client): Promise<void> {
     const loginPromises: Promise<void>[] = [];
     const teamConfigs = await loadTeamConfigsFromDB();
@@ -274,53 +235,42 @@ export async function loginAllVoiceBots(mainClient: Client): Promise<void> {
                     await joinAssignedChannel(instance);
                 });
 
-                // Auto-rejoin on voice-state change (only if no rejoin already pending)
                 botClient.on("voiceStateUpdate", async (_oldState, newState) => {
                     if (newState.member?.id !== botClient.user?.id) return;
-                    // Skip if manually disconnected
                     if (instance.disconnected) return;
-                    // Skip if a rejoin is already scheduled or in progress
                     if (instance.rejoinTimer || instance.joining) return;
 
                     const expectedChannelId = teamConfig.voiceChannelID;
 
                     if (!newState.channelId) {
-                        // Bot was disconnected from voice entirely
                         safeDestroy(instance.connection);
                         instance.connection = null;
-                        // keepBackoff=true to preserve existing backoff progression
                         scheduleRejoin(instance, "Kicked from voice", true);
                         return;
                     }
 
                     if (newState.channelId !== expectedChannelId) {
-                        // Bot was moved to a different channel
                         safeDestroy(instance.connection);
                         instance.connection = null;
                         scheduleRejoin(instance, `Moved to wrong channel ${newState.channelId}`, true);
                     }
                 });
 
-                // Refresh presence when users join/leave the team's voice channel
                 botClient.on("voiceStateUpdate", async (oldState, newState) => {
-                    // Skip bot's own state changes (handled above)
                     if (newState.member?.id === botClient.user?.id) return;
 
                     const channelId = teamConfig.voiceChannelID;
                     if (!channelId) return;
 
-                    // Only refresh if the change involves our tracked channel
                     if (oldState.channelId === channelId || newState.channelId === channelId) {
                         await refreshPresence(teamConfig.TeamName, botClient, teamConfig);
                     }
                 });
 
-                // Kick logging
                 botClient.on("guildDelete", async (guild) => {
                     logError(`${tag} Kicked from guild`, `${guild.name} (${guild.id})`);
                 });
 
-                // General error handler to prevent crash
                 botClient.on("error", (error) => {
                     logError(`${tag} Client error`, error);
                 });
@@ -337,16 +287,12 @@ export async function loginAllVoiceBots(mainClient: Client): Promise<void> {
     logSuccess("Voice Bots", `All initialized (${voiceBots.size} bots)`);
 }
 
-/**
- * Login and connect a single voice bot (used when adding a new bot via dashboard).
- */
 export async function loginSingleVoiceBot(teamConfig: TeamConfig, mainClient: Client): Promise<boolean> {
     if (!teamConfig.token) {
         logDebug(`[VoiceBot][${teamConfig.TeamName}]`, "No token — cannot connect");
         return false;
     }
 
-    // If already exists, skip
     if (voiceBots.has(teamConfig.TeamName)) {
         logDebug(`[VoiceBot][${teamConfig.TeamName}]`, "Already registered — skipping");
         return true;
@@ -395,7 +341,6 @@ export async function loginSingleVoiceBot(teamConfig: TeamConfig, mainClient: Cl
             }
         });
 
-        // Refresh presence when users join/leave the team's voice channel
         botClient.on("voiceStateUpdate", async (oldState, newState) => {
             if (newState.member?.id === botClient.user?.id) return;
 
@@ -424,23 +369,14 @@ export async function loginSingleVoiceBot(teamConfig: TeamConfig, mainClient: Cl
     }
 }
 
-/**
- * Get a voice bot instance by team name.
- */
 export function getVoiceBot(teamName: string): VoiceBotInstance | undefined {
     return voiceBots.get(teamName);
 }
 
-/**
- * Get all voice bot instances.
- */
 export function getAllVoiceBots(): Map<string, VoiceBotInstance> {
     return voiceBots;
 }
 
-/**
- * Send a message using a team's voice bot to a specific channel.
- */
 export async function sendMessageAsBot(
     teamName: string,
     channelId: string,
@@ -462,11 +398,7 @@ export async function sendMessageAsBot(
     }
 }
 
-/**
- * Destroy all voice bots (graceful shutdown).
- */
 export async function destroyAllVoiceBots(): Promise<void> {
-    // Stop all rich presence updates
     stopAllPresenceUpdates();
 
     for (const [name, instance] of voiceBots) {
@@ -486,9 +418,6 @@ export async function destroyAllVoiceBots(): Promise<void> {
     logSuccess("Voice Bots", "All destroyed");
 }
 
-/**
- * Manually disconnect a voice bot from its channel (no auto-rejoin).
- */
 export function disconnectVoiceBot(teamName: string): boolean {
     const instance = voiceBots.get(teamName);
     if (!instance) return false;
@@ -506,9 +435,6 @@ export function disconnectVoiceBot(teamName: string): boolean {
     return true;
 }
 
-/**
- * Reconnect a manually-disconnected voice bot.
- */
 export function reconnectVoiceBot(teamName: string): boolean {
     const instance = voiceBots.get(teamName);
     if (!instance) return false;
@@ -520,9 +446,6 @@ export function reconnectVoiceBot(teamName: string): boolean {
     return true;
 }
 
-/**
- * Deactivate a voice bot — disconnect and set presence offline.
- */
 export async function deactivateVoiceBot(teamName: string): Promise<boolean> {
     const instance = voiceBots.get(teamName);
     if (!instance) return false;
@@ -535,22 +458,17 @@ export async function deactivateVoiceBot(teamName: string): Promise<boolean> {
     safeDestroy(instance.connection);
     instance.connection = null;
 
-    // Stop rich presence updates
     stopPresenceUpdates(teamName);
 
-    // Set bot presence to invisible/offline
     try {
         instance.client.user?.setStatus("invisible");
-    } catch { /* ignore */ }
+    } catch {}
 
     logSuccess(`[VoiceBot][${teamName}]`, "Deactivated (offline)");
     emitBotStatus(teamName, { status: "deactivated", detail: "Bot deactivated" });
     return true;
 }
 
-/**
- * Activate a voice bot — set online and rejoin channel.
- */
 export async function activateVoiceBot(teamName: string): Promise<boolean> {
     const instance = voiceBots.get(teamName);
     if (!instance) return false;
@@ -558,10 +476,9 @@ export async function activateVoiceBot(teamName: string): Promise<boolean> {
     instance.disconnected = false;
     instance.backoffMs = MIN_BACKOFF;
 
-    // Set bot presence to online
     try {
         instance.client.user?.setStatus("online");
-    } catch { /* ignore */ }
+    } catch {}
 
     await joinAssignedChannel(instance);
     logSuccess(`[VoiceBot][${teamName}]`, "Activated (online)");
@@ -569,9 +486,6 @@ export async function activateVoiceBot(teamName: string): Promise<boolean> {
     return true;
 }
 
-/**
- * Update a voice bot's Discord profile (username and/or avatar).
- */
 export async function updateBotProfile(
     teamName: string,
     options: { username?: string; avatarUrl?: string }

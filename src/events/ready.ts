@@ -10,28 +10,21 @@ export default {
     async execute(client: Client) {
         logSuccess("Main Bot Ready", `Logged in as ${client.user?.tag}`);
 
-        try {
-            await fetchAndExport(client);
-        } catch (error: any) {
-            logError("Initial member export failed", error);
-        }
+        // try {
+        //     await fetchAndExport(client);
+        // } catch (error: any) {
+        //     logError("Initial member export failed", error);
+        // }
 
-        // Sync participants with bootcamp role to CSV
-        try {
-            await syncParticipantsFromRole(client);
-        } catch (error: any) {
-            logError("Participant sync failed", error);
-        }
-
-        cron.schedule("0 7 * * *", async () => {
-            try {
-                await fetchAndExport(client);
-                logSuccess("Daily Export", "Member export completed");
-            } catch (error: any) {
-                logError("Daily export failed", error);
-            }
-        }, {
-            timezone: "Africa/Algiers"
-        });
+        // cron.schedule("0 7 * * *", async () => {
+        //     try {
+        //         await fetchAndExport(client);
+        //         logSuccess("Daily Export", "Member export completed");
+        //     } catch (error: any) {
+        //         logError("Daily export failed", error);
+        //     }
+        // }, {
+        //     timezone: "Africa/Algiers"
+        // });
     }
 };
